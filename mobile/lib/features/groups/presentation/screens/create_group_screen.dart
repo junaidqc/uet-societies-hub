@@ -10,7 +10,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../societies/presentation/controllers/society_controller.dart';
-import '../presentation/controllers/group_controller.dart';
+import '../controllers/group_controller.dart';
 
 class CreateGroupScreen extends ConsumerStatefulWidget {
   const CreateGroupScreen({super.key});

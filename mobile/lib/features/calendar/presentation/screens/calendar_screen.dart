@@ -171,7 +171,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   return const EmptyStateView(
                     icon: Icons.calendar_today_outlined,
                     title: 'No Scheduled Events or Deadlines',
-                    message: 'Check back later for upcoming campus events and recruitment cycles.',
+                    description: 'Check back later for upcoming campus events and recruitment cycles.',
                   );
                 }
 

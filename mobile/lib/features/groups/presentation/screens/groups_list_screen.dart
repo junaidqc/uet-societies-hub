@@ -11,8 +11,8 @@ import '../../../../core/widgets/empty_state_view.dart';
 import '../../../../core/widgets/error_state_view.dart';
 import '../../../../core/widgets/pull_to_refresh_wrapper.dart';
 import '../../../../core/widgets/skeleton_loader.dart';
-import '../presentation/controllers/group_controller.dart';
-import '../domain/models/group_model.dart';
+import '../controllers/group_controller.dart';
+import '../../domain/models/group_model.dart';
 
 class GroupsListScreen extends ConsumerWidget {
   const GroupsListScreen({super.key});
@@ -44,7 +44,7 @@ class GroupsListScreen extends ConsumerWidget {
             return EmptyStateView(
               icon: Icons.groups_outlined,
               title: 'No Committee Groups Yet',
-              message:
+              description:
                   'You have not been added to any executive or committee groups. Once selected in society recruitment, your groups will appear here.',
               actionLabel: 'Browse Hiring',
               onAction: () => context.go('/hiring'),

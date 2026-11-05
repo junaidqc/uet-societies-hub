@@ -28,10 +28,6 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Recreate Android Embedding & Scaffolding
-        working-directory: mobile
-        run: flutter create --org pk.edu.uet --project-name uet_societies_hub --platforms android .
-
       - name: Install Project Dependencies
         working-directory: mobile
         run: flutter pub get

@@ -7,8 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../domain/models/group_message_model.dart';
-import '../presentation/controllers/group_controller.dart';
+import '../../domain/models/group_message_model.dart';
+import '../controllers/group_controller.dart';
 
 class ChatMessageBubble extends ConsumerWidget {
   final GroupMessageModel message;

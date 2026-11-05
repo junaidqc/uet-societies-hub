@@ -13,7 +13,7 @@ import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../navigation/presentation/screens/main_scaffold.dart';
 import '../../../societies/presentation/controllers/society_controller.dart';
 import '../../../groups/presentation/controllers/group_controller.dart';
-import '../data/supabase_notifications_repository.dart';
+import '../../data/supabase_notifications_repository.dart';
 
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
@@ -167,7 +167,7 @@ class NotificationsScreen extends ConsumerWidget {
         body: EmptyStateView(
           icon: Icons.notifications_off_outlined,
           title: 'Guest Mode',
-          message:
+          description:
               'Sign in with your @uet.edu.pk student email to receive real-time notifications about recruitment, society invitations, and events.',
           actionLabel: 'Log In with UET Email',
           onAction: () => MainScaffold.promptGuestLogin(context, 'view your notifications'),
@@ -201,7 +201,7 @@ class NotificationsScreen extends ConsumerWidget {
             return const EmptyStateView(
               icon: Icons.notifications_none_rounded,
               title: 'No Notifications',
-              message: 'You are all caught up! Updates from followed societies, hirings, and groups will appear here.',
+              description: 'You are all caught up! Updates from followed societies, hirings, and groups will appear here.',
             );
           }
 

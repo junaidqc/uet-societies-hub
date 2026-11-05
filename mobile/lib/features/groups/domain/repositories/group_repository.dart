@@ -5,8 +5,8 @@
 
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../domain/models/group_model.dart';
-import '../domain/models/group_message_model.dart';
+import '../models/group_model.dart';
+import '../models/group_message_model.dart';
 
 abstract class GroupRepository {
   Future<List<GroupModel>> getUserGroups();

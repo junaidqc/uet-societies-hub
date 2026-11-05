@@ -78,3 +78,5 @@ class SupabaseConfig {
     });
   }
 }
+
+final supabaseClientProvider = Provider<SupabaseClient>((ref) => SupabaseConfig.client);

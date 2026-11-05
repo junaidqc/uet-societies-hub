@@ -194,7 +194,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   return EmptyStateView(
                     icon: Icons.verified_user_outlined,
                     title: 'No $_reportFilter Reports',
-                    message: 'All student reports in this category have been processed.',
+                    description: 'All student reports in this category have been processed.',
                   );
                 }
 

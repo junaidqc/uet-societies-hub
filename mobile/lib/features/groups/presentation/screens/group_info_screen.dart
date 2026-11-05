@@ -10,8 +10,8 @@ import '../../../../core/config/supabase_config.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/skeleton_loader.dart';
 import '../../../../core/widgets/error_state_view.dart';
-import '../presentation/controllers/group_controller.dart';
-import '../domain/models/group_model.dart';
+import '../controllers/group_controller.dart';
+import '../../domain/models/group_model.dart';
 
 class GroupInfoScreen extends ConsumerWidget {
   final String groupId;
