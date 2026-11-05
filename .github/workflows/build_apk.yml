@@ -9,7 +9,7 @@ jobs:
   build-apk:
     name: Build Release APK
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout Source Code
@@ -28,8 +28,9 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Verify Flutter & Environment
-        run: flutter doctor -v
+      - name: Recreate Android Embedding & Scaffolding
+        working-directory: mobile
+        run: flutter create --org pk.edu.uet --project-name uet_societies_hub --platforms android .
 
       - name: Install Project Dependencies
         working-directory: mobile
