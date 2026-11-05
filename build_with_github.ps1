@@ -6,6 +6,9 @@
 
 $ErrorActionPreference = "Stop"
 
+# Ensure we are in the project root directory
+Set-Location "D:\MVP"
+
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "  UET Societies Hub - Automated GitHub SDK / CLI Build   " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
