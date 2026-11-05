@@ -38,7 +38,7 @@ class CalendarItem {
 
 final calendarItemsProvider = Provider.autoDispose<AsyncValue<List<CalendarItem>>>((ref) {
   final eventsAsync = ref.watch(eventsListProvider);
-  final hiringsAsync = ref.watch(hiringListProvider);
+  final hiringsAsync = ref.watch(hiringsListProvider);
 
   if (eventsAsync.isLoading || hiringsAsync.isLoading) {
     return const AsyncValue.loading();

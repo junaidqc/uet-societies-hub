@@ -23,7 +23,7 @@ final pendingReportsProvider = FutureProvider.autoDispose<List<Map<String, dynam
   final response = await client
       .from('reports')
       .select('*, profiles:reporter_id(full_name, email, roll_number)')
-      .order('created_at', {ascending: false});
+      .order('created_at', ascending: false);
   return (response as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 });
 

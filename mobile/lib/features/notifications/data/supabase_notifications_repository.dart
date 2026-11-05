@@ -86,7 +86,7 @@ class SupabaseNotificationsRepository {
         .from('notifications')
         .stream(primaryKey: ['id'])
         .eq('user_id', userId)
-        .order('created_at', {ascending: false})
+        .order('created_at', ascending: false)
         .map((list) => list.map((json) => InAppNotificationModel.fromMap(json)).toList());
   }
 

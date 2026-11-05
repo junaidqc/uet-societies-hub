@@ -27,6 +27,8 @@ class AppLogger {
     }
   }
 
+  static void e(String message, [dynamic error, StackTrace? stackTrace]) => error(message, error, stackTrace);
+
   static String _sanitize(String input) {
     // Strip emails
     var out = input.replaceAll(RegExp(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'), '[REDACTED_EMAIL]');

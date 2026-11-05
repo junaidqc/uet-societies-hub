@@ -26,7 +26,7 @@ class SupabaseGroupRepository implements GroupRepository {
       final response = await _client
           .from('groups')
           .select('*, societies(name), group_members(count)')
-          .order('created_at', {ascending: false});
+          .order('created_at', ascending: false);
 
       return (response as List<dynamic>).map((json) {
         final map = Map<String, dynamic>.from(json as Map);
@@ -105,7 +105,7 @@ class SupabaseGroupRepository implements GroupRepository {
           .from('group_members')
           .select('*, profiles(full_name, email, roll_number, avatar_url)')
           .eq('group_id', groupId)
-          .order('joined_at', {ascending: true});
+          .order('joined_at', ascending: true);
 
       return (response as List<dynamic>)
           .map((json) => GroupMemberModel.fromMap(json as Map<String, dynamic>))
@@ -153,7 +153,7 @@ class SupabaseGroupRepository implements GroupRepository {
         .from('group_messages')
         .stream(primaryKey: ['id'])
         .eq('group_id', groupId)
-        .order('created_at', {ascending: true})
+        .order('created_at', ascending: true)
         .asyncMap((rawList) async {
           final List<GroupMessageModel> messages = [];
           for (final item in rawList) {

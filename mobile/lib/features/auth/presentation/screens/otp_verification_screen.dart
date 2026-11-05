@@ -152,7 +152,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.error.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(10),
-                      border: BorderSide(color: AppColors.error.withOpacity(0.3)),
+                      border: Border.all(color: AppColors.error.withOpacity(0.3)),
                     ),
                     child: Row(
                       children: [
