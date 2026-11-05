@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 
 class ErrorStateView extends StatelessWidget {
+  final String? title;
   final String message;
   final VoidCallback? onRetry;
 
   const ErrorStateView({
     super.key,
+    this.title,
     required this.message,
     this.onRetry,
   });
@@ -33,7 +35,7 @@ class ErrorStateView extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              'Something Went Wrong',
+              title ?? 'Something Went Wrong',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,

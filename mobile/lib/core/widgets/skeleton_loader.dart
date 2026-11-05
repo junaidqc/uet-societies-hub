@@ -73,3 +73,18 @@ class SkeletonCardLoader extends StatelessWidget {
     );
   }
 }
+
+class SkeletonListLoader extends StatelessWidget {
+  final int itemCount;
+  const SkeletonListLoader({super.key, this.itemCount = 6});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      itemCount: itemCount,
+      itemBuilder: (_, __) => const SkeletonCardLoader(),
+    );
+  }
+}

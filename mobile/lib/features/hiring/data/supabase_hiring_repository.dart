@@ -132,7 +132,7 @@ class SupabaseHiringRepository implements HiringRepository {
       // Security Rule Check: Duplicate application block (FR-23)
       final hasAlreadyApplied = await checkHasApplied(hiringId, position);
       if (hasAlreadyApplied) {
-        throw const ValidationFailure('Duplicate Application: You have already applied for the position of "$position".');
+        throw ValidationFailure('Duplicate Application: You have already applied for the position of "$position".');
       }
 
       AppLogger.info('Submitting application for position: $position');

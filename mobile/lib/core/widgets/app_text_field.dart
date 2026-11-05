@@ -16,8 +16,10 @@ class AppTextField extends StatefulWidget {
   const AppTextField({
     super.key,
     this.controller,
-    required this.label,
-    this.hint,
+    String? label,
+    String? labelText,
+    String? hint,
+    String? hintText,
     this.validator,
     this.keyboardType = TextInputType.text,
     this.isPassword = false,
@@ -26,7 +28,8 @@ class AppTextField extends StatefulWidget {
     this.maxLines = 1,
     this.enabled = true,
     this.onChanged,
-  });
+  }) : label = label ?? labelText ?? '',
+       hint = hint ?? hintText;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
