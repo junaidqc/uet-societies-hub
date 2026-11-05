@@ -1,0 +1,49 @@
+# Environment & Secrets (Security Rules)
+.env
+*.env
+.env.local
+mobile/.env
+firebase-service-account.json
+FIREBASE_SERVICE_ACCOUNT_JSON
+
+# Android Keystore & Keys
+*.jks
+*.keystore
+key.properties
+mobile/android/key.properties
+mobile/android/app/uet-release-key.jks
+
+# Flutter & Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+mobile/build/
+mobile/.dart_tool/
+
+# Android Build Outputs
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/app/build/
+mobile/android/captures/
+**/android/.gradle
+**/android/captures/
+**/android/local.properties
+
+# IDE & OS Files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+
+# Database Dumps (local scratch)
+backups/*.sql
+backups/*.gz

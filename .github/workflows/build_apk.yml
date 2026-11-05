@@ -1,0 +1,48 @@
+name: Build Android Release APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: # Allows manual trigger directly from GitHub web UI
+
+jobs:
+  build-apk:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Verify Flutter & Environment
+        run: flutter doctor -v
+
+      - name: Install Project Dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Build Universal Android APK (Release)
+        working-directory: mobile
+        run: flutter build apk --release --no-tree-shake-icons
+
+      - name: Upload APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uet-societies-hub-release-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14
+          if-no-files-found: error

@@ -1,0 +1,53 @@
+name: Supabase Database Automated Daily Backup (NFR-10)
+
+on:
+  schedule:
+    # Runs daily at 00:00 UTC (05:00 AM PKT)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  backup:
+    name: Execute PostgreSQL Database Dump
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Install PostgreSQL Client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Run pg_dump and Compress Backup
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "ERROR: Secret SUPABASE_DB_URL is not configured in repository secrets."
+            exit 1
+          fi
+
+          BACKUP_DATE=$(date +'%Y%m%d_%H%M%S')
+          BACKUP_FILE="uet_societies_hub_backup_${BACKUP_DATE}.sql.gz"
+          mkdir -p backups
+
+          echo "Starting pg_dump against Supabase PostgreSQL cluster..."
+          pg_dump "$DATABASE_URL" \
+            --clean \
+            --if-exists \
+            --no-owner \
+            --no-privileges \
+            --exclude-schema='extensions' \
+            --exclude-schema='vault' \
+            | gzip -9 > "backups/${BACKUP_FILE}"
+
+          echo "Backup created successfully: ${BACKUP_FILE}"
+          ls -lh "backups/${BACKUP_FILE}"
+
+      - name: Archive Database Dump to GitHub Storage (30-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-daily-backup
+          path: backups/*.sql.gz
+          retention-days: 30
+          if-no-files-found: error
