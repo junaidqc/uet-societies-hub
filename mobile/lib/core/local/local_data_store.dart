@@ -607,6 +607,8 @@ class LocalDataStore {
       department: department,
       semester: semester,
       email: cleanEmail,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
     );
 
     _authStreamController.add(_currentUser);
