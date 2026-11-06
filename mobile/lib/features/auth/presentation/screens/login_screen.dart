@@ -168,6 +168,58 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ],
 
+                if (SupabaseConfig.isDemoHost) ...[
+                  Text(
+                    'Quick Demo Accounts (Tap to Auto-fill):',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ActionChip(
+                          avatar: const Icon(Icons.school_rounded, size: 16),
+                          label: const Text('Student (Junaid)', style: TextStyle(fontSize: 12)),
+                          onPressed: () {
+                            setState(() {
+                              _emailController.text = '2022cs101@uet.edu.pk';
+                              _passwordController.text = 'Student@123';
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ActionChip(
+                          avatar: const Icon(Icons.stars_rounded, size: 16),
+                          label: const Text('President (ACM)', style: TextStyle(fontSize: 12)),
+                          onPressed: () {
+                            setState(() {
+                              _emailController.text = 'president.acm@uet.edu.pk';
+                              _passwordController.text = 'President@123';
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ActionChip(
+                          avatar: const Icon(Icons.admin_panel_settings_rounded, size: 16),
+                          label: const Text('System Admin', style: TextStyle(fontSize: 12)),
+                          onPressed: () {
+                            setState(() {
+                              _emailController.text = 'admin@uet.edu.pk';
+                              _passwordController.text = 'Admin@123';
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // Email Field
                 AppTextField(
                   controller: _emailController,

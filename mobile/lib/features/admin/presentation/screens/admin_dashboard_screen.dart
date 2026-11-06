@@ -13,12 +13,33 @@ import '../../../../core/widgets/error_state_view.dart';
 import '../../../../core/widgets/skeleton_loader.dart';
 
 final systemMetricsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
+  if (SupabaseConfig.isDemoHost) {
+    return {
+      'total_users': 1420,
+      'total_societies': 12,
+      'total_posts': 84,
+      'pending_reports': 2,
+    };
+  }
   final client = ref.watch(supabaseClientProvider);
   final response = await client.rpc('get_system_dashboard_metrics');
   return Map<String, dynamic>.from(response as Map);
 });
 
 final pendingReportsProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  if (SupabaseConfig.isDemoHost) {
+    return [
+      {
+        'id': 'rep-1',
+        'target_type': 'comment',
+        'target_id': 'cmt-99',
+        'reason': 'Spam / promotional link in comment section',
+        'status': 'pending',
+        'created_at': DateTime.now().subtract(const Duration(hours: 5)).toIso8601String(),
+        'profiles': {'full_name': 'Ali Raza', 'email': '2021se45@uet.edu.pk', 'roll_number': '2021-SE-45'},
+      },
+    ];
+  }
   final client = ref.watch(supabaseClientProvider);
   final response = await client
       .from('reports')

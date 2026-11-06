@@ -1,11 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/supabase_config.dart';
+import '../../../../core/local/local_repositories.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../domain/models/profile_model.dart';
 import '../../domain/repositories/profile_repository.dart';
 import '../../data/supabase_profile_repository.dart';
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
+  if (SupabaseConfig.isDemoHost) {
+    return LocalProfileRepository();
+  }
   return SupabaseProfileRepository(SupabaseConfig.client);
 });
 

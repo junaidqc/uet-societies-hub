@@ -68,7 +68,18 @@ class SupabaseConfig {
   static String get activeAnonKey => _activeAnonKey;
   static bool get isDemoHost => _activeUrl.contains('demo-uet-societies');
 
-  static SupabaseClient get client => _dynamicClient ?? Supabase.instance.client;
+  static SupabaseClient get client {
+    if (_dynamicClient != null) return _dynamicClient!;
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return _dynamicClient ??= SupabaseClient(
+        'https://supabase.co',
+        'dummy-key',
+        authOptions: const AuthClientOptions(autoRefreshToken: false),
+      );
+    }
+  }
 
   static Future<void> initialize() async {
     try {
@@ -84,33 +95,36 @@ class SupabaseConfig {
       debugPrint('[SupabaseConfig] Failed to read saved credentials: $e');
     }
 
-    try {
-      await Supabase.initialize(
-        url: _activeUrl,
-        anonKey: _activeAnonKey,
-        authOptions: FlutterAuthClientOptions(
-          localStorage: SecureLocalStorage(),
-          autoRefreshToken: true,
-        ),
-        realtimeClientOptions: const RealtimeClientOptions(
-          logLevel: RealtimeLogLevel.info,
-        ),
-      );
-    } catch (e) {
-      debugPrint('[SupabaseConfig] Supabase.initialize error: $e');
-    }
+    // Only attempt real Supabase initialization if a live, non-demo host was configured
+    if (!isDemoHost) {
+      try {
+        await Supabase.initialize(
+          url: _activeUrl,
+          anonKey: _activeAnonKey,
+          authOptions: FlutterAuthClientOptions(
+            localStorage: SecureLocalStorage(),
+            autoRefreshToken: true,
+          ),
+          realtimeClientOptions: const RealtimeClientOptions(
+            logLevel: RealtimeLogLevel.info,
+          ),
+        );
+      } catch (e) {
+        debugPrint('[SupabaseConfig] Supabase.initialize error: $e');
+      }
 
-    // Listen to auth state changes to safely handle session refresh failures
-    try {
-      client.auth.onAuthStateChange.listen((data) {
-        final AuthChangeEvent event = data.event;
-        if (event == AuthChangeEvent.tokenRefreshed) {
-          debugPrint('[Auth] Token successfully refreshed.');
-        } else if (event == AuthChangeEvent.signedOut) {
-          debugPrint('[Auth] User signed out or refresh token expired.');
-        }
-      });
-    } catch (_) {}
+      // Listen to auth state changes to safely handle session refresh failures
+      try {
+        client.auth.onAuthStateChange.listen((data) {
+          final AuthChangeEvent event = data.event;
+          if (event == AuthChangeEvent.tokenRefreshed) {
+            debugPrint('[Auth] Token successfully refreshed.');
+          } else if (event == AuthChangeEvent.signedOut) {
+            debugPrint('[Auth] User signed out or refresh token expired.');
+          }
+        });
+      } catch (_) {}
+    }
   }
 
   static Future<void> saveCustomBackend({

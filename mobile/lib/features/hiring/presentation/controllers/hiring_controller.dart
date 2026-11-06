@@ -1,11 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/supabase_config.dart';
+import '../../../../core/local/local_repositories.dart';
 import '../../domain/models/hiring_model.dart';
 import '../../domain/models/application_model.dart';
 import '../../domain/repositories/hiring_repository.dart';
 import '../../data/supabase_hiring_repository.dart';
 
 final hiringRepositoryProvider = Provider<HiringRepository>((ref) {
+  if (SupabaseConfig.isDemoHost) {
+    return LocalHiringRepository();
+  }
   return SupabaseHiringRepository(SupabaseConfig.client);
 });
 

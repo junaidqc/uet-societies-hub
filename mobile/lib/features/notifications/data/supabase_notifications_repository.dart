@@ -158,11 +158,46 @@ final notificationsRepositoryProvider = Provider<SupabaseNotificationsRepository
 });
 
 final inAppNotificationsStreamProvider = StreamProvider.autoDispose<List<InAppNotificationModel>>((ref) {
+  if (SupabaseConfig.isDemoHost) {
+    final now = DateTime.now();
+    return Stream.value([
+      InAppNotificationModel(
+        id: 'notif-1',
+        userId: 'usr-student-1',
+        title: 'Welcome to UET Societies Hub! 🎓',
+        body: 'Explore societies, track deadlines, and apply for recruitments.',
+        data: const {},
+        isRead: false,
+        createdAt: now.subtract(const Duration(hours: 1)),
+      ),
+      InAppNotificationModel(
+        id: 'notif-2',
+        userId: 'usr-student-1',
+        title: 'Application Shortlisted 🎯',
+        body: 'ACM UET shortlisted your application for Technical Lead (Flutter/Python).',
+        data: const {},
+        isRead: false,
+        createdAt: now.subtract(const Duration(hours: 3)),
+      ),
+      InAppNotificationModel(
+        id: 'notif-3',
+        userId: 'usr-student-1',
+        title: 'New Workshop Announced',
+        body: 'IEEE UET announced "Deep Learning with PyTorch" workshop for Friday.',
+        data: const {},
+        isRead: true,
+        createdAt: now.subtract(const Duration(days: 1)),
+      ),
+    ]);
+  }
   final repo = ref.watch(notificationsRepositoryProvider);
   return repo.streamNotifications();
 });
 
 final mutePreferencesProvider = FutureProvider.autoDispose<List<NotificationPreferenceModel>>((ref) async {
+  if (SupabaseConfig.isDemoHost) {
+    return [];
+  }
   final repo = ref.watch(notificationsRepositoryProvider);
   return repo.getMutePreferences();
 });

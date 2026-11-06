@@ -1,10 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/supabase_config.dart';
+import '../../../../core/local/local_repositories.dart';
 import '../../domain/models/user_model.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../data/repositories/supabase_auth_repository.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  if (SupabaseConfig.isDemoHost) {
+    return LocalAuthRepository();
+  }
   return SupabaseAuthRepository(SupabaseConfig.client);
 });
 

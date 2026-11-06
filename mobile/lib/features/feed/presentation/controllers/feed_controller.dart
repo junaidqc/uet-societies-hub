@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/supabase_config.dart';
+import '../../../../core/local/local_repositories.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../domain/models/post_model.dart';
 import '../../domain/models/comment_model.dart';
@@ -8,6 +9,9 @@ import '../../domain/repositories/feed_repository.dart';
 import '../../data/supabase_feed_repository.dart';
 
 final feedRepositoryProvider = Provider<FeedRepository>((ref) {
+  if (SupabaseConfig.isDemoHost) {
+    return LocalFeedRepository();
+  }
   return SupabaseFeedRepository(SupabaseConfig.client);
 });
 
@@ -38,6 +42,13 @@ final postCommentsProvider = FutureProvider.family.autoDispose<List<CommentModel
 final userAdminSocietiesProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   final user = ref.watch(currentUserProvider);
   if (user == null || user.isGuest) return [];
+
+  if (SupabaseConfig.isDemoHost) {
+    return [
+      {'id': 'soc-acm', 'name': 'ACM UET Lahore Student Chapter', 'logo_url': null, 'role': 'admin'},
+      {'id': 'soc-ieee', 'name': 'IEEE UET Student Branch', 'logo_url': null, 'role': 'member'},
+    ];
+  }
 
   final client = SupabaseConfig.client;
 

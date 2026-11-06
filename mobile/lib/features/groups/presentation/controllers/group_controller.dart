@@ -6,12 +6,16 @@
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/supabase_config.dart';
+import '../../../../core/local/local_repositories.dart';
 import '../../data/supabase_group_repository.dart';
 import '../../domain/models/group_model.dart';
 import '../../domain/models/group_message_model.dart';
 import '../../domain/repositories/group_repository.dart';
 
 final supabaseGroupRepositoryProvider = Provider<GroupRepository>((ref) {
+  if (SupabaseConfig.isDemoHost) {
+    return LocalGroupRepository();
+  }
   final client = ref.watch(supabaseClientProvider);
   return SupabaseGroupRepository(client);
 });

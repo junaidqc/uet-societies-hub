@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/supabase_config.dart';
+import '../../../../core/local/local_repositories.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../domain/models/society_model.dart';
 import '../../domain/models/office_bearer_model.dart';
@@ -7,6 +8,9 @@ import '../../domain/repositories/society_repository.dart';
 import '../../data/supabase_society_repository.dart';
 
 final societyRepositoryProvider = Provider<SocietyRepository>((ref) {
+  if (SupabaseConfig.isDemoHost) {
+    return LocalSocietyRepository();
+  }
   return SupabaseSocietyRepository(SupabaseConfig.client);
 });
 
