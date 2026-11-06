@@ -380,9 +380,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     ),
                   ),
                 ],
-                    ),
-                  ),
-                ],
 
                 // Full Name
                 AppTextField(

@@ -128,8 +128,7 @@ class SupabaseConfig {
     _dynamicClient = SupabaseClient(
       cleanUrl,
       cleanKey,
-      authOptions: AuthClientOptions(
-        localStorage: SecureLocalStorage(),
+      authOptions: const AuthClientOptions(
         autoRefreshToken: true,
       ),
     );

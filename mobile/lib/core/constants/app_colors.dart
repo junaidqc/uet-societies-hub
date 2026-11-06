@@ -11,6 +11,7 @@ class AppColors {
   // Secondary & Accents
   static const Color secondary = Color(0xFF0F766E);
   static const Color accent = Color(0xFF10B981); // Emerald
+  static const Color success = Color(0xFF10B981); // Emerald
   static const Color warning = Color(0xFFF59E0B); // Amber
   static const Color error = Color(0xFFEF4444); // Red 500
 
