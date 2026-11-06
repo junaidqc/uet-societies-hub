@@ -94,6 +94,8 @@ class LocalDataStore {
     );
     _users.addAll([adminUser, presidentUser]);
 
+    final now = DateTime.now();
+
     // Student profile
     _profiles['usr-student-1'] = StudentProfile(
       id: 'usr-student-1',
@@ -104,10 +106,11 @@ class LocalDataStore {
       email: '2022cs101@uet.edu.pk',
       bio: 'Junior Developer & AI enthusiast at UET Lahore. Active in societies and hackathons.',
       phoneNumber: '+92 300 1234567',
+      createdAt: now.subtract(const Duration(days: 300)),
+      updatedAt: now,
     );
 
     // 2. Pre-configure Societies
-    final now = DateTime.now();
     _societies.addAll([
       SocietyModel(
         id: 'soc-acm',
@@ -210,7 +213,6 @@ class LocalDataStore {
         role: 'President',
         rollNumber: '2021-CS-45',
         department: 'Computer Science',
-        appointmentDate: now.subtract(const Duration(days: 120)),
       ),
       OfficeBearerModel(
         id: 'ob-2',
@@ -220,7 +222,6 @@ class LocalDataStore {
         role: 'Technical Lead',
         rollNumber: '2022-CS-101',
         department: 'Computer Science',
-        appointmentDate: now.subtract(const Duration(days: 90)),
       ),
     ];
 
@@ -283,16 +284,18 @@ class LocalDataStore {
       CommentModel(
         id: 'cmt-1',
         postId: 'post-1',
-        authorId: 'usr-student-1',
+        userId: 'usr-student-1',
         authorName: 'Muhammad Junaid',
+        authorRoll: '2022-CS-101',
         content: 'Excited for the AI Agent hackathon! Will registration be open for freshers?',
         createdAt: now.subtract(const Duration(hours: 3)),
       ),
       CommentModel(
         id: 'cmt-2',
         postId: 'post-1',
-        authorId: 'usr-president-1',
+        userId: 'usr-president-1',
         authorName: 'Hamza Ali',
+        authorRoll: '2021-CS-45',
         content: 'Yes! Freshers have a dedicated track with beginner-friendly mentorship.',
         createdAt: now.subtract(const Duration(hours: 2)),
       ),
@@ -775,8 +778,9 @@ class LocalDataStore {
     final cmt = CommentModel(
       id: 'cmt-${DateTime.now().millisecondsSinceEpoch}',
       postId: postId,
-      authorId: _currentUser?.id ?? 'usr-student-1',
+      userId: _currentUser?.id ?? 'usr-student-1',
       authorName: _currentUser?.fullName ?? 'UET Student',
+      authorRoll: _currentUser?.rollNumber ?? '2022-CS-101',
       content: content,
       createdAt: DateTime.now(),
     );
@@ -985,6 +989,7 @@ class LocalDataStore {
   List<Map<String, dynamic>> getNotifications() => List.unmodifiable(_notifications);
 
   StudentProfile? getProfile(String userId) {
+    final now = DateTime.now();
     return _profiles[userId] ??
         StudentProfile(
           id: userId,
@@ -993,6 +998,8 @@ class LocalDataStore {
           department: _currentUser?.department ?? 'Computer Science',
           semester: _currentUser?.semester ?? 6,
           email: _currentUser?.email ?? '2022cs101@uet.edu.pk',
+          createdAt: now.subtract(const Duration(days: 100)),
+          updatedAt: now,
         );
   }
 
@@ -1004,6 +1011,7 @@ class LocalDataStore {
     String? phoneNumber,
   }) {
     final existing = getProfile(userId);
+    final now = DateTime.now();
     _profiles[userId] = StudentProfile(
       id: userId,
       fullName: fullName,
@@ -1013,6 +1021,8 @@ class LocalDataStore {
       email: existing?.email ?? '2022cs101@uet.edu.pk',
       bio: bio,
       phoneNumber: phoneNumber,
+      createdAt: existing?.createdAt ?? now.subtract(const Duration(days: 100)),
+      updatedAt: now,
     );
   }
 }
