@@ -53,30 +53,94 @@ class SecureLocalStorage extends LocalStorage {
 
 /// Supabase client provider and initializer
 class SupabaseConfig {
-  static SupabaseClient get client => Supabase.instance.client;
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
+  static const String _urlStorageKey = 'custom_supabase_url';
+  static const String _anonStorageKey = 'custom_supabase_anon_key';
+
+  static String _activeUrl = EnvConfig.supabaseUrl;
+  static String _activeAnonKey = EnvConfig.supabaseAnonKey;
+  static SupabaseClient? _dynamicClient;
+
+  static String get activeUrl => _activeUrl;
+  static String get activeAnonKey => _activeAnonKey;
+  static bool get isDemoHost => _activeUrl.contains('demo-uet-societies');
+
+  static SupabaseClient get client => _dynamicClient ?? Supabase.instance.client;
 
   static Future<void> initialize() async {
-    await Supabase.initialize(
-      url: EnvConfig.supabaseUrl,
-      anonKey: EnvConfig.supabaseAnonKey,
-      authOptions: FlutterAuthClientOptions(
+    try {
+      final savedUrl = await _storage.read(key: _urlStorageKey);
+      final savedKey = await _storage.read(key: _anonStorageKey);
+      if (savedUrl != null && savedUrl.trim().isNotEmpty) {
+        _activeUrl = savedUrl.trim();
+      }
+      if (savedKey != null && savedKey.trim().isNotEmpty) {
+        _activeAnonKey = savedKey.trim();
+      }
+    } catch (e) {
+      debugPrint('[SupabaseConfig] Failed to read saved credentials: $e');
+    }
+
+    try {
+      await Supabase.initialize(
+        url: _activeUrl,
+        anonKey: _activeAnonKey,
+        authOptions: FlutterAuthClientOptions(
+          localStorage: SecureLocalStorage(),
+          autoRefreshToken: true,
+        ),
+        realtimeClientOptions: const RealtimeClientOptions(
+          logLevel: RealtimeLogLevel.info,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[SupabaseConfig] Supabase.initialize error: $e');
+    }
+
+    // Listen to auth state changes to safely handle session refresh failures
+    try {
+      client.auth.onAuthStateChange.listen((data) {
+        final AuthChangeEvent event = data.event;
+        if (event == AuthChangeEvent.tokenRefreshed) {
+          debugPrint('[Auth] Token successfully refreshed.');
+        } else if (event == AuthChangeEvent.signedOut) {
+          debugPrint('[Auth] User signed out or refresh token expired.');
+        }
+      });
+    } catch (_) {}
+  }
+
+  static Future<void> saveCustomBackend({
+    required String url,
+    required String anonKey,
+  }) async {
+    final cleanUrl = url.trim();
+    final cleanKey = anonKey.trim();
+    _activeUrl = cleanUrl;
+    _activeAnonKey = cleanKey;
+
+    await _storage.write(key: _urlStorageKey, value: cleanUrl);
+    await _storage.write(key: _anonStorageKey, value: cleanKey);
+
+    _dynamicClient = SupabaseClient(
+      cleanUrl,
+      cleanKey,
+      authOptions: AuthClientOptions(
         localStorage: SecureLocalStorage(),
         autoRefreshToken: true,
       ),
-      realtimeClientOptions: const RealtimeClientOptions(
-        logLevel: RealtimeLogLevel.info,
-      ),
     );
+  }
 
-    // Listen to auth state changes to safely handle session refresh failures
-    client.auth.onAuthStateChange.listen((data) {
-      final AuthChangeEvent event = data.event;
-      if (event == AuthChangeEvent.tokenRefreshed) {
-        debugPrint('[Auth] Token successfully refreshed.');
-      } else if (event == AuthChangeEvent.signedOut) {
-        debugPrint('[Auth] User signed out or refresh token expired.');
-      }
-    });
+  static Future<void> resetToDefault() async {
+    await _storage.delete(key: _urlStorageKey);
+    await _storage.delete(key: _anonStorageKey);
+    _activeUrl = EnvConfig.supabaseUrl;
+    _activeAnonKey = EnvConfig.supabaseAnonKey;
+    _dynamicClient = null;
   }
 }
 

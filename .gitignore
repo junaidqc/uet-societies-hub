@@ -47,3 +47,6 @@ Thumbs.db
 # Database Dumps (local scratch)
 backups/*.sql
 backups/*.gz
+
+# Build binaries
+*.apk

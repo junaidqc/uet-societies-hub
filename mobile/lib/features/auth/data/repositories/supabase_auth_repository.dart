@@ -76,6 +76,12 @@ class SupabaseAuthRepository implements AuthRepository {
       throw AuthFailure(e.message);
     } catch (e) {
       AppLogger.error('Unexpected error during registration', e);
+      final errorStr = e.toString();
+      if (errorStr.contains('Failed host lookup') || errorStr.contains('No address associated with hostname')) {
+        throw const ServerFailure(
+          'Could not connect to Supabase backend (Host lookup failed). Tap the Database/Cloud icon at the top to configure your active Supabase URL & Anon Key.',
+        );
+      }
       throw ServerFailure('Registration failed: ${e.toString()}');
     }
   }
@@ -123,6 +129,12 @@ class SupabaseAuthRepository implements AuthRepository {
       throw AuthFailure(e.message);
     } catch (e) {
       AppLogger.error('SignIn error', e);
+      final errorStr = e.toString();
+      if (errorStr.contains('Failed host lookup') || errorStr.contains('No address associated with hostname')) {
+        throw const ServerFailure(
+          'Could not connect to Supabase backend (Host lookup failed). Tap the Database/Cloud icon at the top to configure your active Supabase URL & Anon Key.',
+        );
+      }
       throw const ServerFailure('Login failed. Please verify credentials.');
     }
   }
