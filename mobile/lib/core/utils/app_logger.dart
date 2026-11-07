@@ -16,6 +16,15 @@ class AppLogger {
     }
   }
 
+  static void warn(String message) {
+    if (kDebugMode) {
+      final sanitized = _sanitize(message);
+      debugPrint('[WARN] $sanitized');
+    }
+  }
+
+  static void warning(String message) => warn(message);
+
   static void error(String message, [dynamic error, StackTrace? stackTrace]) {
     final sanitized = _sanitize(message);
     debugPrint('[ERROR] $sanitized');

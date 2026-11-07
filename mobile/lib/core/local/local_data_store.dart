@@ -801,6 +801,9 @@ class LocalDataStore {
     }).toList();
   }
 
+  List<PostModel> getFollowedFeed() => getPosts(onlyFollowed: true);
+  List<PostModel> getPublicFeed() => getPosts(onlyFollowed: false);
+
   void toggleLikePost(String postId) {
     if (_likedPostIds.contains(postId)) {
       _likedPostIds.remove(postId);
