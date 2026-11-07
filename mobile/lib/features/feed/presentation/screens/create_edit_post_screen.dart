@@ -303,7 +303,7 @@ class _CreateEditPostScreenState extends ConsumerState<CreateEditPostScreen> {
                   title: const Text('Public Visibility', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   subtitle: Text(
                     _isPublic
-                        ? 'Visible to all UET students and guest visitors (FR-12).'
+                        ? 'Visible to all UET students and guest visitors.'
                         : 'Members Only: Accessible strictly to approved society members & council.',
                     style: const TextStyle(fontSize: 12),
                   ),

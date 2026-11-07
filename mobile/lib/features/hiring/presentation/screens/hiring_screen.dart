@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -131,7 +132,7 @@ class HiringScreen extends ConsumerWidget {
                   children: [
                     const Icon(Icons.bookmark_added_rounded, size: 16, color: AppColors.primaryDark),
                     const SizedBox(width: 8),
-                    const Text('Showing Bookmarked Hirings (FR-24)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primaryDark)),
+                    const Text('Showing Bookmarked Opportunities', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primaryDark)),
                     const Spacer(),
                     GestureDetector(
                       onTap: () => ref.read(hiringSavedOnlyProvider.notifier).state = false,
@@ -254,9 +255,8 @@ class HiringScreen extends ConsumerWidget {
                                       if (currentUser == null || currentUser.isGuest) {
                                         MainScaffold.promptGuestLogin(context, 'bookmark recruitment opportunities');
                                       } else {
-                                        ref
-                                            .read(hiringActionControllerProvider.notifier)
-                                            .toggleSave(hiring.id, hiring.isSaved);
+                                        HapticFeedback.lightImpact();
+                                        ref.read(hiringActionControllerProvider.notifier).toggleSave(hiring.id, hiring.isSaved);
                                       }
                                     },
                                   ),

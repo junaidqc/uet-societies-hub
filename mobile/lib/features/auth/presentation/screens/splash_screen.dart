@@ -29,9 +29,22 @@ class SplashScreen extends ConsumerWidget {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 110,
-                    height: 110,
+                  TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0.0, end: 1.0),
+                    duration: const Duration(milliseconds: 800),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, child) {
+                      return Transform.scale(
+                        scale: 0.88 + (0.12 * value),
+                        child: Opacity(
+                          opacity: value,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: Container(
+                      width: 110,
+                      height: 110,
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: isDark ? AppColors.darkSurface : Colors.white,
@@ -55,6 +68,7 @@ class SplashScreen extends ConsumerWidget {
                         ),
                       ),
                     ),
+                  ),
                   ),
                   const SizedBox(height: 24),
                   Text(

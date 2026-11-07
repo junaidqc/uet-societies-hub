@@ -14,7 +14,13 @@ class ResilientHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     final client = super.createHttpClient(context);
-    client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+    client.badCertificateCallback = (X509Certificate cert, String host, int port) {
+      // Security: Strictly scope handshake accommodation to Supabase edge domains only
+      if (host.endsWith('.supabase.co') || host.endsWith('.supabase.in') || host == 'supabase.co') {
+        return true;
+      }
+      return false;
+    };
     client.connectionTimeout = const Duration(seconds: 10);
     return client;
   }

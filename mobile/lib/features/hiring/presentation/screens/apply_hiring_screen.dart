@@ -287,7 +287,7 @@ class _ApplyHiringScreenState extends ConsumerState<ApplyHiringScreen> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Duplicate Block (FR-23): You have already submitted an application for "$_selectedPosition".',
+                                'You have already submitted an application for "$_selectedPosition".',
                                 style: const TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.bold),
                               ),
                             ),

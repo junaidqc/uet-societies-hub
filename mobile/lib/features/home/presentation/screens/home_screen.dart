@@ -51,12 +51,12 @@ class HomeScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.calendar_month_outlined),
-            tooltip: 'Campus Calendar & Deadlines (FR-35)',
+            tooltip: 'Campus Calendar & Deadlines',
             onPressed: () => context.push('/calendar'),
           ),
           IconButton(
             icon: const Icon(Icons.forum_outlined),
-            tooltip: 'Committee Groups (FR-26)',
+            tooltip: 'Committee Groups',
             onPressed: () => context.push('/groups'),
           ),
           IconButton(
@@ -84,7 +84,7 @@ class HomeScreen extends ConsumerWidget {
                     children: const [
                       Icon(Icons.campaign_outlined, color: AppColors.primary),
                       SizedBox(width: 10),
-                      Text('Publish Announcement (FR-11)', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('Publish Announcement', style: TextStyle(fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -94,7 +94,7 @@ class HomeScreen extends ConsumerWidget {
                     children: const [
                       Icon(Icons.event_outlined, color: AppColors.primary),
                       SizedBox(width: 10),
-                      Text('Host Campus Event (FR-16)', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('Host Campus Event', style: TextStyle(fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),

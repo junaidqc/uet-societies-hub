@@ -44,7 +44,7 @@ BEGIN
     v_roll_number := COALESCE(NEW.raw_user_meta_data->>'roll_number', 'PENDING-' || substr(NEW.id::text, 1, 8));
     v_department := COALESCE(NEW.raw_user_meta_data->>'department', 'Computer Science');
     v_semester := COALESCE((NEW.raw_user_meta_data->>'semester')::INT, 1);
-    v_is_system_admin := COALESCE((NEW.raw_user_meta_data->>'is_system_admin')::BOOLEAN, FALSE);
+    v_is_system_admin := FALSE;
 
     INSERT INTO public.profiles (
         id,

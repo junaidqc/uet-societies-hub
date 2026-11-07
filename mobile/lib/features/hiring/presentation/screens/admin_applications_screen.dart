@@ -155,7 +155,7 @@ class _AdminApplicationsScreenState extends ConsumerState<AdminApplicationsScree
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Add to Committee Group (FR-28)',
+                  'Add to Committee Group',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),

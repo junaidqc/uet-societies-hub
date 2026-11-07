@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/supabase_config.dart';
@@ -89,6 +90,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   }
 
   Future<void> _handleSignUp() async {
+    FocusScope.of(context).unfocus();
+    HapticFeedback.lightImpact();
+
     // Auto-complete email if not fully typed
     String emailText = _emailController.text.trim();
     final rollText = _rollNumberController.text.trim().toUpperCase();
@@ -133,16 +137,38 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           semester: int.tryParse(_semesterController.text.trim()) ?? 1,
         );
 
-    if (success && mounted) {
+    if (!mounted) return;
+
+    if (success) {
+      final user = ref.read(authRepositoryProvider).currentUser;
+      if (user != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Welcome to UET Societies Hub, $fullName! Account created.'),
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        context.go('/home');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Account created! Verification code sent to $emailText.'),
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        context.push('/verify-otp?email=${Uri.encodeComponent(emailText)}');
+      }
+    } else {
+      final errorMsg = ref.read(authControllerProvider).errorMessage ?? 'Account creation failed. Please check your details.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Welcome to UET Societies Hub, $fullName! Account created.'),
-          backgroundColor: AppColors.success,
-          duration: const Duration(seconds: 3),
+          content: Text(errorMsg),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 4),
         ),
       );
-      // Immediately navigate into the main app
-      context.go('/home');
     }
   }
 
@@ -159,7 +185,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: SafeArea(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
           child: Form(
@@ -511,6 +540,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

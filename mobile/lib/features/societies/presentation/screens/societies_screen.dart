@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -148,6 +149,7 @@ class _SocietiesScreenState extends ConsumerState<SocietiesScreen> {
               child: TextField(
                 controller: _searchController,
                 onChanged: (val) {
+                  setState(() {});
                   ref.read(societySearchQueryProvider.notifier).state = val;
                 },
                 decoration: InputDecoration(
@@ -182,6 +184,7 @@ class _SocietiesScreenState extends ConsumerState<SocietiesScreen> {
                     selected: isSelected,
                     onSelected: (selected) {
                       if (selected) {
+                        HapticFeedback.selectionClick();
                         ref.read(societyCategoryFilterProvider.notifier).state = cat;
                       }
                     },

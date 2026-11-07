@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -230,7 +231,7 @@ class PostCard extends ConsumerWidget {
                         children: const [
                           Icon(Icons.flag_outlined, size: 18, color: AppColors.error),
                           SizedBox(width: 8),
-                          Text('Report Content (FR-38)', style: TextStyle(color: AppColors.error)),
+                          Text('Report Content', style: TextStyle(color: AppColors.error)),
                         ],
                       ),
                     ),
@@ -291,9 +292,8 @@ class PostCard extends ConsumerWidget {
                       if (currentUser == null || currentUser.isGuest) {
                         MainScaffold.promptGuestLogin(context, 'like this post');
                       } else {
-                        ref
-                            .read(feedActionControllerProvider.notifier)
-                            .toggleLike(post.id, post.isLiked);
+                        HapticFeedback.lightImpact();
+                        ref.read(feedActionControllerProvider.notifier).toggleLike(post.id, post.isLiked);
                       }
                     },
                     child: Padding(

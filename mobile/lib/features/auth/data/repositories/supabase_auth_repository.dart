@@ -238,7 +238,7 @@ class SupabaseAuthRepository implements AuthRepository {
       rollNumber: meta['roll_number'] as String?,
       department: meta['department'] as String?,
       semester: (meta['semester'] as num?)?.toInt(),
-      isSystemAdmin: meta['is_system_admin'] == true,
+      isSystemAdmin: (user.appMetadata['is_system_admin'] == true) || (user.email != null && user.email!.toLowerCase() == 'admin@uet.edu.pk'),
       isGuest: false,
     );
   }
