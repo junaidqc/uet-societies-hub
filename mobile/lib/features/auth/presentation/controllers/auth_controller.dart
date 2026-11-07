@@ -131,6 +131,24 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<bool> resendSignUpOtp({required String email}) async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      await _repository.resendSignUpOtp(email: email);
+      state = state.copyWith(
+        isLoading: false,
+        successMessage: 'Verification code resent to $email',
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: e.toString(),
+      );
+      return false;
+    }
+  }
+
   Future<bool> sendPasswordResetOtp({required String email}) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {

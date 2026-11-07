@@ -172,6 +172,25 @@ class SupabaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> resendSignUpOtp({required String email}) async {
+    try {
+      AppLogger.info('Resending signup OTP for email confirmation');
+      await _client.auth.resend(
+        type: OtpType.signup,
+        email: email.trim().toLowerCase(),
+      );
+    } on AuthException catch (e) {
+      AppLogger.error('Resend signup OTP failed: \${e.message}');
+      throw AuthFailure(e.message);
+    } catch (e) {
+      if (isNetworkOrHandshakeError(e)) {
+        AppLogger.warn('Network issue during resend — user should retry.');
+      }
+      throw const ServerFailure('Could not resend verification code. Please try again.');
+    }
+  }
+
+  @override
   Future<void> sendPasswordResetOtp({required String email}) async {
     try {
       AppLogger.info('Sending password reset code');

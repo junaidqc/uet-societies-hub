@@ -24,6 +24,10 @@ abstract class AuthRepository {
     required String password,
   });
 
+  Future<void> resendSignUpOtp({
+    required String email,
+  });
+
   Future<void> sendPasswordResetOtp({
     required String email,
   });

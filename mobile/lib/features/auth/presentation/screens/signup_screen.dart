@@ -158,7 +158,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             duration: const Duration(seconds: 4),
           ),
         );
-        context.push('/verify-otp?email=${Uri.encodeComponent(emailText)}');
+        context.push('/verify-otp', extra: emailText);
       }
     } else {
       final errorMsg = ref.read(authControllerProvider).errorMessage ?? 'Account creation failed. Please check your details.';
