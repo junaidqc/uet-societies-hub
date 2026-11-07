@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/auth/domain/models/user_model.dart';
 import '../../features/auth/presentation/controllers/auth_controller.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
@@ -38,12 +39,55 @@ final GlobalKey<NavigatorState> _hiringNavigatorKey = GlobalKey<NavigatorState>(
 final GlobalKey<NavigatorState> _notificationsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'notifications');
 final GlobalKey<NavigatorState> _profileNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'profile');
 
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterNotifier(this._ref) {
+    _ref.listen<AsyncValue<AppUser?>>(
+      authStateProvider,
+      (_, __) {
+        notifyListeners();
+      },
+    );
+  }
+
+  String? redirect(BuildContext context, GoRouterState state) {
+    final authState = _ref.read(authStateProvider);
+    final user = authState.value ?? _ref.read(authRepositoryProvider).currentUser;
+    final isLoggedIn = user != null;
+
+    final loc = state.matchedLocation;
+    final isAuthRoute = loc == '/splash' ||
+        loc == '/login' ||
+        loc == '/signup' ||
+        loc == '/forgot-password';
+
+    // If authenticated/guest and trying to view splash or auth screens, route to home
+    if (isLoggedIn && isAuthRoute) {
+      return '/home';
+    }
+
+    // If unauthenticated and trying to view protected screens, route to splash
+    if (!isLoggedIn && !isAuthRoute && loc != '/verify-otp') {
+      return '/splash';
+    }
+
+    return null;
+  }
+}
+
+final routerNotifierProvider = Provider<RouterNotifier>((ref) {
+  return RouterNotifier(ref);
+});
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final notifier = ref.watch(routerNotifierProvider);
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
+    refreshListenable: notifier,
+    redirect: notifier.redirect,
     routes: [
       // Splash / Welcome
       GoRoute(

@@ -89,7 +89,29 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   }
 
   Future<void> _handleSignUp() async {
-    if (!_formKey.currentState!.validate()) return;
+    // Auto-complete email if not fully typed
+    String emailText = _emailController.text.trim();
+    final rollText = _rollNumberController.text.trim().toUpperCase();
+
+    if (emailText.isEmpty && rollText.isNotEmpty) {
+      final sanitized = rollText.replaceAll('-', '').toLowerCase();
+      emailText = '$sanitized@uet.edu.pk';
+      _emailController.text = emailText;
+    } else if (emailText.isNotEmpty && !emailText.contains('@')) {
+      emailText = '$emailText@uet.edu.pk';
+      _emailController.text = emailText;
+    }
+
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please check and complete all required fields correctly.'),
+          backgroundColor: AppColors.error,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
 
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -101,18 +123,26 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       return;
     }
 
-    final email = _emailController.text.trim();
+    final fullName = _fullNameController.text.trim();
     final success = await ref.read(authControllerProvider.notifier).signUp(
-          email: email,
+          email: emailText,
           password: _passwordController.text,
-          fullName: _fullNameController.text.trim(),
-          rollNumber: _rollNumberController.text.trim().toUpperCase(),
+          fullName: fullName,
+          rollNumber: rollText,
           department: _selectedDepartment,
           semester: int.tryParse(_semesterController.text.trim()) ?? 1,
         );
 
     if (success && mounted) {
-      context.push('/verify-otp', extra: email);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Welcome to UET Societies Hub, $fullName! Account created.'),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      // Immediately navigate into the main app
+      context.go('/home');
     }
   }
 

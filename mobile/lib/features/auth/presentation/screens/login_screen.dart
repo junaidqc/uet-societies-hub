@@ -30,14 +30,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
+    // If user enters roll number or username without @, append @uet.edu.pk
+    String emailText = _emailController.text.trim();
+    if (emailText.isNotEmpty && !emailText.contains('@')) {
+      emailText = '$emailText@uet.edu.pk';
+      _emailController.text = emailText;
+    }
+
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your email or roll number and password.'),
+          backgroundColor: AppColors.error,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
 
     final success = await ref.read(authControllerProvider.notifier).signIn(
-          email: _emailController.text,
+          email: emailText,
           password: _passwordController.text,
         );
 
     if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Logged in successfully! Welcome back.'),
+          backgroundColor: AppColors.success,
+          duration: Duration(seconds: 2),
+        ),
+      );
       context.go('/home');
     }
   }

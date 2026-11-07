@@ -29,7 +29,10 @@ class LocalDataStore {
   bool _isGuest = false;
   final _authStreamController = StreamController<AppUser?>.broadcast();
 
-  Stream<AppUser?> get authStateChanges => _authStreamController.stream;
+  Stream<AppUser?> get authStateChanges async* {
+    yield _currentUser;
+    yield* _authStreamController.stream;
+  }
   AppUser? get currentUser => _currentUser;
   bool get isGuest => _isGuest;
 
@@ -70,8 +73,15 @@ class LocalDataStore {
       semester: 6,
       isSystemAdmin: false,
     );
-    _currentUser = defaultStudent;
-    _users.add(defaultStudent);
+    final studentAlias = const AppUser(
+      id: 'usr-student-alias',
+      email: 'student@uet.edu.pk',
+      fullName: 'Muhammad Junaid',
+      rollNumber: '2022-CS-101',
+      department: 'Computer Science',
+      semester: 6,
+      isSystemAdmin: false,
+    );
 
     // Additional sample users
     final adminUser = const AppUser(
@@ -92,7 +102,17 @@ class LocalDataStore {
       semester: 8,
       isSystemAdmin: false,
     );
-    _users.addAll([adminUser, presidentUser]);
+    final presidentAlias = const AppUser(
+      id: 'usr-president-alias',
+      email: 'president@uet.edu.pk',
+      fullName: 'Hamza Ali',
+      rollNumber: '2021-CS-45',
+      department: 'Computer Science',
+      semester: 8,
+      isSystemAdmin: false,
+    );
+    _users.addAll([defaultStudent, studentAlias, adminUser, presidentUser, presidentAlias]);
+    _currentUser = null; // Fresh app start on welcome screen
 
     final now = DateTime.now();
 
@@ -553,13 +573,15 @@ class LocalDataStore {
 
     // Check if user exists
     final found = _users.firstWhere(
-      (u) => u.email.toLowerCase() == cleanEmail,
+      (u) => u.email.toLowerCase() == cleanEmail ||
+             (cleanEmail == 'student@uet.edu.pk' && u.id == 'usr-student-1') ||
+             (cleanEmail == 'president@uet.edu.pk' && u.id == 'usr-president-1'),
       orElse: () {
-        // Automatically create a valid user session for any UET email entered
+        // Automatically create a valid user session for any entered email or roll number
         final rollGuess = cleanEmail.split('@').first.toUpperCase();
         final newUser = AppUser(
           id: 'usr-${DateTime.now().millisecondsSinceEpoch}',
-          email: cleanEmail,
+          email: cleanEmail.contains('@') ? cleanEmail : '$cleanEmail@uet.edu.pk',
           fullName: 'UET Student ($rollGuess)',
           rollNumber: rollGuess,
           department: 'Engineering',
@@ -572,6 +594,19 @@ class LocalDataStore {
     );
 
     _currentUser = found;
+    if (!_profiles.containsKey(found.id)) {
+      final now = DateTime.now();
+      _profiles[found.id] = StudentProfile(
+        id: found.id,
+        fullName: found.fullName,
+        rollNumber: found.rollNumber,
+        department: found.department,
+        semester: found.semester,
+        email: found.email,
+        createdAt: now,
+        updatedAt: now,
+      );
+    }
     _authStreamController.add(_currentUser);
   }
 
