@@ -25,7 +25,10 @@ class SupabaseAuthRepository implements AuthRepository {
   }
 
   @override
-  Stream<AppUser?> get authStateChanges => _authStateController.stream;
+  Stream<AppUser?> get authStateChanges async* {
+    yield currentUser;
+    yield* _authStateController.stream;
+  }
 
   @override
   AppUser? get currentUser {
@@ -79,7 +82,7 @@ class SupabaseAuthRepository implements AuthRepository {
       final errorStr = e.toString();
       if (errorStr.contains('Failed host lookup') || errorStr.contains('No address associated with hostname')) {
         throw const ServerFailure(
-          'Could not connect to Supabase backend (Host lookup failed). Tap the Database/Cloud icon at the top to configure your active Supabase URL & Anon Key.',
+          'Could not connect to server. Please check your internet connection.',
         );
       }
       throw ServerFailure('Registration failed: ${e.toString()}');
@@ -132,7 +135,7 @@ class SupabaseAuthRepository implements AuthRepository {
       final errorStr = e.toString();
       if (errorStr.contains('Failed host lookup') || errorStr.contains('No address associated with hostname')) {
         throw const ServerFailure(
-          'Could not connect to Supabase backend (Host lookup failed). Tap the Database/Cloud icon at the top to configure your active Supabase URL & Anon Key.',
+          'Could not connect to server. Please check your internet connection.',
         );
       }
       throw const ServerFailure('Login failed. Please verify credentials.');

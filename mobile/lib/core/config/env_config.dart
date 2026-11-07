@@ -9,7 +9,7 @@ class EnvConfig {
 
   static const String supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key_for_development',
+    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmYmNjdHR5Zmludm15cGFkY3RqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQwMzY5MTksImV4cCI6MjEwOTYxMjkxOX0.Eh11Nsilns68cOCZVc1kgX6PtUXIzOuqjpFWjprbdSw',
   );
 
   static const String appName = 'UET Societies Hub';
