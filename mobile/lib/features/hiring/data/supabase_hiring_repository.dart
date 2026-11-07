@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/errors/failures.dart';
+import '../../../../core/local/local_data_store.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/network_resilience.dart';
 import '../domain/models/hiring_model.dart';
 import '../domain/models/application_model.dart';
 import '../domain/repositories/hiring_repository.dart';
@@ -36,6 +38,9 @@ class SupabaseHiringRepository implements HiringRepository {
       return list;
     } catch (e) {
       AppLogger.error('Error fetching hirings', e);
+      if (isNetworkOrHandshakeError(e)) {
+        return LocalDataStore().getHirings(societyId: societyId, onlySaved: onlySaved);
+      }
       throw ServerFailure('Could not load recruitments: ${e.toString()}');
     }
   }

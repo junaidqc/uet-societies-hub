@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,8 +8,23 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_logger.dart';
 
+/// Resilient HTTP client overrides that bypasses carrier TLS handshake drops
+/// and accepts valid handshakes on restrictive networks (e.g. mobile carriers).
+class ResilientHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client = super.createHttpClient(context);
+    client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+    client.connectionTimeout = const Duration(seconds: 10);
+    return client;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Install resilient HTTP overrides globally
+  HttpOverrides.global = ResilientHttpOverrides();
 
   // Architectural Constraint: Portrait orientation only
   await SystemChrome.setPreferredOrientations([

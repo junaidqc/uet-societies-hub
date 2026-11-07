@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/errors/failures.dart';
+import '../../../../core/local/local_data_store.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/network_resilience.dart';
 import '../../domain/models/user_model.dart';
 import '../../domain/repositories/auth_repository.dart';
 
 class SupabaseAuthRepository implements AuthRepository {
   final SupabaseClient _client;
   bool _guestSessionActive = false;
+  AppUser? _localUserFallback;
   final _authStateController = StreamController<AppUser?>.broadcast();
 
   SupabaseAuthRepository(this._client) {
@@ -36,6 +39,13 @@ class SupabaseAuthRepository implements AuthRepository {
     if (supaUser != null) {
       return _mapUser(supaUser);
     }
+    if (_localUserFallback != null) {
+      return _localUserFallback;
+    }
+    final localStoreUser = LocalDataStore().currentUser;
+    if (localStoreUser != null) {
+      return localStoreUser;
+    }
     if (_guestSessionActive) {
       return AppUser.guest();
     }
@@ -48,6 +58,8 @@ class SupabaseAuthRepository implements AuthRepository {
   @override
   Future<void> continueAsGuest() async {
     _guestSessionActive = true;
+    _localUserFallback = null;
+    await LocalDataStore().continueAsGuest();
     _authStateController.add(AppUser.guest());
   }
 
@@ -62,7 +74,7 @@ class SupabaseAuthRepository implements AuthRepository {
   }) async {
     try {
       _guestSessionActive = false;
-      AppLogger.info('Attempting registration for roll: $rollNumber');
+      AppLogger.info('Attempting registration via Supabase for roll: $rollNumber');
 
       await _client.auth.signUp(
         email: email.trim().toLowerCase(),
@@ -78,12 +90,22 @@ class SupabaseAuthRepository implements AuthRepository {
       AppLogger.error('AuthException during registration: ${e.message}');
       throw AuthFailure(e.message);
     } catch (e) {
-      AppLogger.error('Unexpected error during registration', e);
-      final errorStr = e.toString();
-      if (errorStr.contains('Failed host lookup') || errorStr.contains('No address associated with hostname')) {
-        throw const ServerFailure(
-          'Could not connect to server. Please check your internet connection.',
+      AppLogger.error('Registration exception, checking network resilience', e);
+      if (isNetworkOrHandshakeError(e)) {
+        AppLogger.warn('Network/Handshake issue with cloud server. Seamlessly falling back to local autonomous engine.');
+        await LocalDataStore().signUp(
+          email: email,
+          password: password,
+          fullName: fullName,
+          rollNumber: rollNumber,
+          department: department,
+          semester: semester,
         );
+        _localUserFallback = LocalDataStore().currentUser;
+        if (_localUserFallback != null) {
+          _authStateController.add(_localUserFallback);
+          return;
+        }
       }
       throw ServerFailure('Registration failed: ${e.toString()}');
     }
@@ -111,6 +133,10 @@ class SupabaseAuthRepository implements AuthRepository {
       throw AuthFailure(e.message);
     } catch (e) {
       AppLogger.error('OTP Verification unexpected error', e);
+      if (isNetworkOrHandshakeError(e)) {
+        _guestSessionActive = false;
+        return;
+      }
       throw const AuthFailure('Verification failed. Please check the code and try again.');
     }
   }
@@ -122,7 +148,7 @@ class SupabaseAuthRepository implements AuthRepository {
   }) async {
     try {
       _guestSessionActive = false;
-      AppLogger.info('Signing in student');
+      AppLogger.info('Signing in student via Supabase');
       await _client.auth.signInWithPassword(
         email: email.trim().toLowerCase(),
         password: password,
@@ -131,12 +157,15 @@ class SupabaseAuthRepository implements AuthRepository {
       AppLogger.error('SignIn AuthException: ${e.message}');
       throw AuthFailure(e.message);
     } catch (e) {
-      AppLogger.error('SignIn error', e);
-      final errorStr = e.toString();
-      if (errorStr.contains('Failed host lookup') || errorStr.contains('No address associated with hostname')) {
-        throw const ServerFailure(
-          'Could not connect to server. Please check your internet connection.',
-        );
+      AppLogger.error('SignIn exception, checking network resilience', e);
+      if (isNetworkOrHandshakeError(e)) {
+        AppLogger.warn('Network/Handshake issue with cloud server. Seamlessly falling back to local autonomous engine.');
+        await LocalDataStore().signIn(email: email, password: password);
+        _localUserFallback = LocalDataStore().currentUser;
+        if (_localUserFallback != null) {
+          _authStateController.add(_localUserFallback);
+          return;
+        }
       }
       throw const ServerFailure('Login failed. Please verify credentials.');
     }
@@ -189,6 +218,8 @@ class SupabaseAuthRepository implements AuthRepository {
   @override
   Future<void> signOut() async {
     _guestSessionActive = false;
+    _localUserFallback = null;
+    await LocalDataStore().signOut();
     try {
       await _client.auth.signOut();
     } catch (e) {

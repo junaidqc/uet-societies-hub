@@ -2,7 +2,9 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/errors/failures.dart';
+import '../../../../core/local/local_data_store.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/network_resilience.dart';
 import '../domain/models/society_model.dart';
 import '../domain/models/office_bearer_model.dart';
 import '../domain/repositories/society_repository.dart';
@@ -44,6 +46,10 @@ class SupabaseSocietyRepository implements SocietyRepository {
       }).toList();
     } catch (e) {
       AppLogger.error('Failed to get societies', e);
+      if (isNetworkOrHandshakeError(e)) {
+        AppLogger.warn('Network/Handshake error in getSocieties, returning local societies.');
+        return LocalDataStore().getSocieties(category: category, search: search);
+      }
       throw ServerFailure('Could not load societies: ${e.toString()}');
     }
   }
@@ -91,6 +97,9 @@ class SupabaseSocietyRepository implements SocietyRepository {
       );
     } catch (e) {
       AppLogger.error('Failed to get society by id', e);
+      if (isNetworkOrHandshakeError(e)) {
+        return LocalDataStore().getSocietyById(id);
+      }
       throw ServerFailure('Failed to load society details.');
     }
   }

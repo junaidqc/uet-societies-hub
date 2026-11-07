@@ -2,7 +2,9 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/errors/failures.dart';
+import '../../../../core/local/local_data_store.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/network_resilience.dart';
 import '../domain/models/post_model.dart';
 import '../domain/models/comment_model.dart';
 import '../domain/models/event_model.dart';
@@ -49,6 +51,9 @@ class SupabaseFeedRepository implements FeedRepository {
           .toList();
     } catch (e) {
       AppLogger.error('Failed to get followed feed', e);
+      if (isNetworkOrHandshakeError(e)) {
+        return LocalDataStore().getFollowedFeed();
+      }
       throw ServerFailure('Could not load feed: ${e.toString()}');
     }
   }
@@ -56,7 +61,6 @@ class SupabaseFeedRepository implements FeedRepository {
   @override
   Future<List<PostModel>> getPublicFeed() async {
     try {
-      AppLogger.info('Fetching public feed (Newest first)');
       final user = _client.auth.currentUser;
 
       final response = await _client
@@ -70,6 +74,9 @@ class SupabaseFeedRepository implements FeedRepository {
           .toList();
     } catch (e) {
       AppLogger.error('Failed to get public feed', e);
+      if (isNetworkOrHandshakeError(e)) {
+        return LocalDataStore().getPublicFeed();
+      }
       throw ServerFailure('Could not load posts: ${e.toString()}');
     }
   }
@@ -77,7 +84,6 @@ class SupabaseFeedRepository implements FeedRepository {
   @override
   Future<List<EventModel>> getEvents() async {
     try {
-      AppLogger.info('Fetching upcoming events');
       final user = _client.auth.currentUser;
 
       final response = await _client
@@ -90,6 +96,9 @@ class SupabaseFeedRepository implements FeedRepository {
           .toList();
     } catch (e) {
       AppLogger.error('Failed to load events', e);
+      if (isNetworkOrHandshakeError(e)) {
+        return LocalDataStore().getEvents();
+      }
       throw ServerFailure('Could not load events: ${e.toString()}');
     }
   }

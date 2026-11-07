@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/errors/failures.dart';
+import '../../../../core/local/local_data_store.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/network_resilience.dart';
 import '../domain/models/profile_model.dart';
 import '../domain/repositories/profile_repository.dart';
 
@@ -25,6 +27,9 @@ class SupabaseProfileRepository implements ProfileRepository {
       return StudentProfile.fromJson(response);
     } catch (e) {
       AppLogger.error('Failed to get profile', e);
+      if (isNetworkOrHandshakeError(e)) {
+        return LocalDataStore().getProfile(userId);
+      }
       throw ServerFailure('Could not load profile: ${e.toString()}');
     }
   }
