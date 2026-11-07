@@ -598,10 +598,10 @@ class LocalDataStore {
       final now = DateTime.now();
       _profiles[found.id] = StudentProfile(
         id: found.id,
-        fullName: found.fullName,
-        rollNumber: found.rollNumber,
-        department: found.department,
-        semester: found.semester,
+        fullName: found.fullName ?? 'UET Student',
+        rollNumber: found.rollNumber ?? '2022-CS-101',
+        department: found.department ?? 'Computer Science',
+        semester: found.semester ?? 6,
         email: found.email,
         createdAt: now,
         updatedAt: now,
