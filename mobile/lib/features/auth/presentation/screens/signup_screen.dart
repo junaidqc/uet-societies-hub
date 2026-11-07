@@ -158,13 +158,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.cloud_sync_rounded, color: AppColors.primary),
-            tooltip: 'Configure Supabase Backend',
-            onPressed: () => BackendConfigSheet.show(context),
-          ),
-        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -223,37 +216,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 ),
                 const SizedBox(height: 18),
 
-                if (SupabaseConfig.isDemoHost) ...[
-                  GestureDetector(
-                    onTap: () => BackendConfigSheet.show(context),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.amber.shade700, width: 0.8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.warning_amber_rounded, size: 18, color: Colors.amber.shade900),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Demo Supabase backend active. Tap to configure credentials.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.amber.shade900,
-                              ),
-                            ),
-                          ),
-                          const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.amber),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+
 
                 // ==========================================
                 // 🎓 STUDENT CARD 1-TAP SCANNER HERO CARD

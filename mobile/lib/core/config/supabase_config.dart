@@ -66,7 +66,11 @@ class SupabaseConfig {
 
   static String get activeUrl => _activeUrl;
   static String get activeAnonKey => _activeAnonKey;
-  static bool get isDemoHost => _activeUrl.contains('demo-uet-societies');
+  static bool get hasValidCredentials =>
+      !_activeUrl.contains('demo-uet-societies') &&
+      !_activeAnonKey.contains('dummy');
+
+  static bool get isDemoHost => !hasValidCredentials;
 
   static SupabaseClient get client {
     if (_dynamicClient != null) return _dynamicClient!;

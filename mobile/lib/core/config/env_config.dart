@@ -4,7 +4,7 @@
 class EnvConfig {
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://demo-uet-societies.supabase.co',
+    defaultValue: 'https://efbccttyfinvmypadctj.supabase.co',
   );
 
   static const String supabaseAnonKey = String.fromEnvironment(

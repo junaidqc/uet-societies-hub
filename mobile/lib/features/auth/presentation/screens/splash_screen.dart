@@ -23,46 +23,7 @@ class SplashScreen extends ConsumerWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Top Bar with Backend Config Action
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (SupabaseConfig.isDemoHost)
-                    GestureDetector(
-                      onTap: () => BackendConfigSheet.show(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.amber.shade700, width: 0.8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.warning_amber_rounded, size: 14, color: Colors.amber.shade800),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Setup Backend',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.amber.shade900,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    const SizedBox.shrink(),
-                  IconButton(
-                    icon: const Icon(Icons.cloud_sync_rounded, color: AppColors.primary),
-                    tooltip: 'Configure Supabase Backend',
-                    onPressed: () => BackendConfigSheet.show(context),
-                  ),
-                ],
-              ),
+              const SizedBox(height: 12),
 
               // Hero Branding Section with Official UET Lahore Emblem
               Column(
