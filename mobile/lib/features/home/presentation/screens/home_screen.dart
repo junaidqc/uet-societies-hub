@@ -42,9 +42,12 @@ class HomeScreen extends ConsumerWidget {
               child: const Icon(Icons.school_rounded, color: AppColors.primary, size: 20),
             ),
             const SizedBox(width: 10),
-            const Text(
-              'UET Societies Hub',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            const Flexible(
+              child: Text(
+                'UET Societies Hub',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              ),
             ),
           ],
         ),
@@ -164,16 +167,21 @@ class HomeScreen extends ConsumerWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            user != null && !user.isGuest
-                                ? 'Welcome, ${user.fullName?.split(" ").first ?? "Student"}! 👋'
-                                : 'Welcome, Guest Explorer! 👋',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                          Expanded(
+                            child: Text(
+                              user != null && !user.isGuest
+                                  ? 'Welcome, ${user.fullName?.split(" ").first ?? "Student"}! 👋'
+                                  : 'Welcome, Guest Explorer! 👋',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
@@ -217,9 +225,12 @@ class HomeScreen extends ConsumerWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Upcoming Events & Hackathons',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        const Expanded(
+                          child: Text(
+                            'Upcoming Events & Hackathons',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
                         ),
                         if (isSocietyAdmin)
                           TextButton.icon(

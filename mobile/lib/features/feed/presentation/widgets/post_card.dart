@@ -345,9 +345,13 @@ class PostCard extends ConsumerWidget {
                   const Spacer(),
 
                   // Post Author Credit
-                  Text(
-                    'by ${post.authorName}',
-                    style: const TextStyle(fontSize: 11, color: AppColors.lightTextMuted),
+                  Flexible(
+                    child: Text(
+                      'by ${post.authorName}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11, color: AppColors.lightTextMuted),
+                    ),
                   ),
                 ],
               ),

@@ -18,11 +18,15 @@ class SplashScreen extends ConsumerWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom - 32,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
               const SizedBox(height: 12),
 
               // Hero Branding Section with Official UET Lahore Emblem
@@ -114,6 +118,8 @@ class SplashScreen extends ConsumerWidget {
                 ],
               ),
 
+              const SizedBox(height: 24),
+
               // Action Buttons
               Column(
                 mainAxisSize: MainAxisSize.min,
@@ -161,6 +167,7 @@ class SplashScreen extends ConsumerWidget {
                 ],
               ),
             ],
+          ),
           ),
         ),
       ),

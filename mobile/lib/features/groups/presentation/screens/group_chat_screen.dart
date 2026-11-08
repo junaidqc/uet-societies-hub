@@ -342,12 +342,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
               children: [
                 Icon(Icons.history_toggle_off, size: 16, color: AppColors.primary),
                 SizedBox(width: 8),
-                Text(
-                  'Messages and attachments in this group disappear after 30 days.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
+                Flexible(
+                  child: Text(
+                    'Messages and attachments in this group disappear after 30 days.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
               ],

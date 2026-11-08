@@ -167,18 +167,16 @@ class _CommentsBottomSheetState extends ConsumerState<CommentsBottomSheet> {
                                   children: [
                                     Row(
                                       children: [
-                                        Text(
-                                          c.authorName,
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                        ),
-                                        if (c.authorRoll.isNotEmpty) ...[
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            '(${c.authorRoll})',
-                                            style: const TextStyle(fontSize: 11, color: AppColors.lightTextMuted),
+                                        Expanded(
+                                          child: Text(
+                                            c.authorRoll.isNotEmpty
+                                                ? '${c.authorName} (${c.authorRoll})'
+                                                : c.authorName,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                           ),
-                                        ],
-                                        const Spacer(),
+                                        ),
+                                        const SizedBox(width: 8),
                                         Text(
                                           timeStr,
                                           style: const TextStyle(fontSize: 10, color: AppColors.lightTextMuted),

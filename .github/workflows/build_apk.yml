@@ -3,7 +3,10 @@ name: Build Android Release APK
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch: # Allows manual trigger directly from GitHub web UI
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-apk:
@@ -43,3 +46,15 @@ jobs:
           path: mobile/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 14
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest --yes || true
+          git tag -d latest 2>/dev/null || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+          gh release create latest mobile/build/app/outputs/flutter-apk/app-release.apk \
+            --title "UET Societies Hub (Latest Release)" \
+            --notes "Automated release build with database relationship fixes, guest mode corrections, UI overflow fixes, and dummy test user (2025@uet.edu.pk)." \
+            --latest

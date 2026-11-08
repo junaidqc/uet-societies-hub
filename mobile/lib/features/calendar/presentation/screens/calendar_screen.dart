@@ -205,7 +205,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             _showEventDetailsSheet(context, item.originalObject as EventModel);
           } else {
             final hiring = item.originalObject as HiringModel;
-            context.push('/hiring/apply', extra: hiring);
+            context.push('/hiring/${hiring.id}/apply');
           }
         },
         child: Padding(

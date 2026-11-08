@@ -177,9 +177,12 @@ class EventCard extends ConsumerWidget {
                     children: [
                       const Icon(Icons.access_time_rounded, size: 14, color: AppColors.lightTextSecondary),
                       const SizedBox(width: 4),
-                      Text(
-                        timeRange,
-                        style: const TextStyle(fontSize: 11, color: AppColors.lightTextSecondary),
+                      Expanded(
+                        child: Text(
+                          timeRange,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, color: AppColors.lightTextSecondary),
+                        ),
                       ),
                     ],
                   ),

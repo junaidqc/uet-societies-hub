@@ -54,7 +54,7 @@ class RouterNotifier extends ChangeNotifier {
   String? redirect(BuildContext context, GoRouterState state) {
     final authState = _ref.read(authStateProvider);
     final user = authState.value ?? _ref.read(authRepositoryProvider).currentUser;
-    final isLoggedIn = user != null;
+    final isFullyLoggedIn = user != null && !user.isGuest;
 
     final loc = state.matchedLocation;
     final isAuthRoute = loc == '/splash' ||
@@ -62,13 +62,13 @@ class RouterNotifier extends ChangeNotifier {
         loc == '/signup' ||
         loc == '/forgot-password';
 
-    // If authenticated/guest and trying to view splash or auth screens, route to home
-    if (isLoggedIn && isAuthRoute) {
+    // If fully logged in and trying to view splash or auth screens, route to home
+    if (isFullyLoggedIn && isAuthRoute) {
       return '/home';
     }
 
-    // If unauthenticated and trying to view protected screens, route to splash
-    if (!isLoggedIn && !isAuthRoute && loc != '/verify-otp') {
+    // If unauthenticated (neither logged in nor guest) and trying to view protected screens, route to splash
+    if (user == null && !isAuthRoute && loc != '/verify-otp') {
       return '/splash';
     }
 

@@ -74,6 +74,8 @@ class SupabaseAuthRepository implements AuthRepository {
   }) async {
     try {
       _guestSessionActive = false;
+      _localUserFallback = null;
+      await LocalDataStore().signOut();
       AppLogger.info('Attempting registration via Supabase for roll: $rollNumber');
 
       await _client.auth.signUp(
@@ -148,6 +150,8 @@ class SupabaseAuthRepository implements AuthRepository {
   }) async {
     try {
       _guestSessionActive = false;
+      _localUserFallback = null;
+      await LocalDataStore().signOut();
       AppLogger.info('Signing in student via Supabase');
       await _client.auth.signInWithPassword(
         email: email.trim().toLowerCase(),
