@@ -6,25 +6,30 @@ import {
   ExternalLink,
   PlusCircle,
   CheckCircle,
-  Share2,
-  Filter,
   X,
-  Sparkles,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Event, Profile } from '../types';
+import { useToast } from './Toast';
 
 interface CalendarSectionProps {
   currentUser: Profile | null;
   onRequireAuth: () => void;
+  onRegisterEvent: (event: Event) => void;
+  cachedEvents?: Event[];
+  onCacheEvents?: (events: Event[]) => void;
 }
 
 export const CalendarSection: React.FC<CalendarSectionProps> = ({
   currentUser,
   onRequireAuth,
+  onRegisterEvent,
+  cachedEvents = [],
+  onCacheEvents,
 }) => {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
+  const [events, setEvents] = useState<Event[]>(cachedEvents);
+  const [loading, setLoading] = useState(cachedEvents.length === 0);
   const [interestedSet, setInterestedSet] = useState<Set<string>>(new Set());
   const [filterType, setFilterType] = useState('all');
 
@@ -40,7 +45,7 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({
   const [submittingEvent, setSubmittingEvent] = useState(false);
 
   const fetchEvents = async () => {
-    setLoading(true);
+    if (events.length === 0) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('events')
@@ -51,7 +56,12 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({
         .order('start_time', { ascending: true });
 
       if (error) throw error;
-      setEvents(data || []);
+      const processed = data || [];
+      setEvents(processed);
+
+      if (onCacheEvents) {
+        onCacheEvents(processed);
+      }
 
       if (currentUser) {
         const { data: intData } = await supabase
@@ -89,8 +99,10 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({
     const nextSet = new Set(interestedSet);
     if (isInterested) {
       nextSet.delete(event.id);
+      showToast(`Removed RSVP for ${event.title}`, 'info');
     } else {
       nextSet.add(event.id);
+      showToast(`You're going to ${event.title}!`, 'success');
     }
     setInterestedSet(nextSet);
 
@@ -158,9 +170,10 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({
       setDescription('');
       setStartDate('');
       setRegLink('');
+      showToast('Event successfully added to campus calendar!', 'success');
     } catch (err: any) {
       console.error('Create event error:', err);
-      alert(err.message || 'Failed to create event. Society authorization needed.');
+      showToast(err.message || 'Failed to create event. Society authorization needed.', 'error');
     } finally {
       setSubmittingEvent(false);
     }
@@ -222,14 +235,21 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({
         ))}
       </div>
 
-      {/* Event Cards Grid */}
+      {/* Event Cards Grid (BUG-08: rich skeleton wireframes) */}
       {loading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 h-40 animate-pulse"
-            />
+              className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 flex gap-4 animate-pulse"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-slate-800 shrink-0" />
+              <div className="flex-1 space-y-2.5">
+                <div className="h-4 w-40 bg-slate-800 rounded" />
+                <div className="h-5 w-60 bg-slate-800 rounded" />
+                <div className="h-3 w-full bg-slate-800/60 rounded" />
+              </div>
+            </div>
           ))}
         </div>
       ) : filteredEvents.length > 0 ? (
@@ -292,18 +312,15 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({
                     <CalendarIcon className="w-4 h-4 text-emerald-400" />
                   </a>
 
-                  {/* External Reg Link if available */}
-                  {evt.registration_link && (
-                    <a
-                      href={evt.registration_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-1.5 transition"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Register</span>
-                    </a>
-                  )}
+                  {/* BUG-03: Internal Event Registration Modal flow */}
+                  <button
+                    type="button"
+                    onClick={() => onRegisterEvent(evt)}
+                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-1.5 transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Register</span>
+                  </button>
 
                   {/* RSVP Button */}
                   <button
@@ -402,19 +419,6 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-300 font-medium block mb-1">
-                  Registration Form Link (Optional)
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://forms.gle/..."
-                  value={regLink}
-                  onChange={(e) => setRegLink(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono"
                 />
               </div>
 

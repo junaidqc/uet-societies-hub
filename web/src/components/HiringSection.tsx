@@ -1,25 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import {
   Briefcase,
-  Clock,
-  Users,
   CheckCircle,
-  AlertCircle,
-  FileText,
   X,
-  ExternalLink,
-  HelpCircle,
   Send,
-  Building,
+  FileCheck,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Hiring, Profile, Application } from '../types';
+import { useToast } from './Toast';
 
 interface HiringSectionProps {
   currentUser: Profile | null;
   onRequireAuth: () => void;
   selectedHiringForApply?: Hiring | null;
   onClearSelectedHiring?: () => void;
+  cachedHirings?: Hiring[];
+  onCacheHirings?: (hirings: Hiring[]) => void;
 }
 
 export const HiringSection: React.FC<HiringSectionProps> = ({
@@ -27,23 +25,28 @@ export const HiringSection: React.FC<HiringSectionProps> = ({
   onRequireAuth,
   selectedHiringForApply,
   onClearSelectedHiring,
+  cachedHirings = [],
+  onCacheHirings,
 }) => {
-  const [hirings, setHirings] = useState<Hiring[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
+  const [hirings, setHirings] = useState<Hiring[]>(cachedHirings);
+  const [loading, setLoading] = useState(cachedHirings.length === 0);
 
   // Application Modal state
   const [activeHiring, setActiveHiring] = useState<Hiring | null>(null);
   const [selectedPosition, setSelectedPosition] = useState('');
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [resumeLink, setResumeLink] = useState('');
   const [portfolioLink, setPortfolioLink] = useState('');
   const [submittingApp, setSubmittingApp] = useState(false);
   const [appliedSuccess, setAppliedSuccess] = useState(false);
+  const [confirmedSocietyName, setConfirmedSocietyName] = useState('');
 
   // Saved user applications
   const [myApplications, setMyApplications] = useState<Application[]>([]);
 
   const fetchHirings = async () => {
-    setLoading(true);
+    if (hirings.length === 0) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('hirings')
@@ -55,7 +58,12 @@ export const HiringSection: React.FC<HiringSectionProps> = ({
         .order('deadline', { ascending: true });
 
       if (error) throw error;
-      setHirings(data || []);
+      const processed = data || [];
+      setHirings(processed);
+
+      if (onCacheHirings) {
+        onCacheHirings(processed);
+      }
 
       if (currentUser) {
         const { data: appData } = await supabase
@@ -89,12 +97,18 @@ export const HiringSection: React.FC<HiringSectionProps> = ({
     setActiveHiring(hiring);
     setSelectedPosition(hiring.positions[0] || 'General Member');
     setAnswers({});
+    setResumeLink('');
     setPortfolioLink('');
     setAppliedSuccess(false);
+
+    // BUG-05 fix: preserve society name upfront
+    const sName = hiring.society?.name || 'the Society Executive Council';
+    setConfirmedSocietyName(sName);
   };
 
   const handleCloseModal = () => {
     setActiveHiring(null);
+    setAppliedSuccess(false);
     if (onClearSelectedHiring) onClearSelectedHiring();
   };
 
@@ -102,7 +116,15 @@ export const HiringSection: React.FC<HiringSectionProps> = ({
     e.preventDefault();
     if (!activeHiring || !currentUser) return;
 
+    if (!resumeLink.trim()) {
+      showToast('Please provide your Resume / CV Link.', 'error');
+      return;
+    }
+
     setSubmittingApp(true);
+    const targetSociety = activeHiring.society?.name || confirmedSocietyName || 'the Society Directorate';
+    setConfirmedSocietyName(targetSociety);
+
     try {
       const payload = {
         hiring_id: activeHiring.id,
@@ -111,30 +133,43 @@ export const HiringSection: React.FC<HiringSectionProps> = ({
         status: 'submitted',
         answers: {
           ...answers,
-          portfolio: portfolioLink,
+          resume_url: resumeLink.trim(),
+          portfolio_url: portfolioLink.trim() || undefined,
+          applicant_name: currentUser.full_name,
           roll_number: currentUser.roll_number,
           department: currentUser.department,
         },
-        resume_url: portfolioLink || null,
+        resume_url: resumeLink.trim() || null,
       };
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('applications')
-        .insert(payload)
-        .select()
-        .single();
+        .insert(payload);
 
       if (error) throw error;
 
       setAppliedSuccess(true);
+      showToast(`Application for ${selectedPosition} submitted to ${targetSociety}!`, 'success');
       fetchHirings();
     } catch (err: any) {
       console.error('Application submit error:', err);
-      alert(err.message || 'Failed to submit application.');
+      showToast(err.message || 'Failed to submit application.', 'error');
     } finally {
       setSubmittingApp(false);
     }
   };
+
+  // BUG-09: Filter out custom questions that duplicate resume/portfolio links
+  const relevantCustomQuestions = (activeHiring?.custom_questions || []).filter((q) => {
+    const qLower = q.question.toLowerCase();
+    return !(
+      qLower.includes('github') ||
+      qLower.includes('portfolio') ||
+      qLower.includes('resume') ||
+      qLower.includes('cv') ||
+      qLower.includes('behance')
+    );
+  });
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -165,14 +200,28 @@ export const HiringSection: React.FC<HiringSectionProps> = ({
         )}
       </div>
 
-      {/* Hirings List */}
+      {/* Hirings List (BUG-08: rich skeleton wireframes) */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 h-60 animate-pulse"
-            />
+              className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 animate-pulse"
+            >
+              <div className="flex justify-between items-start">
+                <div className="w-10 h-10 rounded-2xl bg-slate-800" />
+                <div className="w-20 h-5 rounded-full bg-slate-800" />
+              </div>
+              <div className="h-5 w-48 bg-slate-800 rounded" />
+              <div className="space-y-2">
+                <div className="h-3 w-full bg-slate-800/60 rounded" />
+                <div className="h-3 w-3/4 bg-slate-800/60 rounded" />
+              </div>
+              <div className="pt-4 border-t border-slate-800/80 flex justify-between">
+                <div className="h-4 w-24 bg-slate-800 rounded" />
+                <div className="h-8 w-24 bg-slate-800 rounded-xl" />
+              </div>
+            </div>
           ))}
         </div>
       ) : hirings.length > 0 ? (
@@ -261,6 +310,7 @@ export const HiringSection: React.FC<HiringSectionProps> = ({
                     </div>
                   ) : (
                     <button
+                      type="button"
                       onClick={() => handleOpenApply(hiring)}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-md shadow-emerald-900/30 transition"
                     >
@@ -287,7 +337,7 @@ export const HiringSection: React.FC<HiringSectionProps> = ({
               <div>
                 <h3 className="font-bold text-white text-base">Society Application</h3>
                 <p className="text-xs text-emerald-400 font-medium">
-                  {activeHiring.society?.name} &bull; {activeHiring.title}
+                  {confirmedSocietyName || activeHiring.society?.name || 'Campus Society'} &bull; {activeHiring.title}
                 </p>
               </div>
               <button
@@ -298,6 +348,7 @@ export const HiringSection: React.FC<HiringSectionProps> = ({
               </button>
             </div>
 
+            {/* BUG-05 Fix: confirmation string explicitly renders confirmed society name */}
             {appliedSuccess ? (
               <div className="p-8 text-center space-y-4">
                 <div className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto">
@@ -306,7 +357,7 @@ export const HiringSection: React.FC<HiringSectionProps> = ({
                 <h4 className="text-lg font-bold text-white">Application Submitted!</h4>
                 <p className="text-xs text-slate-300 max-w-sm mx-auto leading-relaxed">
                   Your application for <span className="text-emerald-400 font-semibold">{selectedPosition}</span> has
-                  been sent to {activeHiring.society?.name}. You will be notified regarding interview rounds.
+                  been sent to <strong className="text-white font-bold">{confirmedSocietyName || activeHiring.society?.name || 'the Society Executive Council'}</strong>. You will be notified regarding interview rounds.
                 </p>
                 <button
                   onClick={handleCloseModal}
@@ -357,41 +408,65 @@ export const HiringSection: React.FC<HiringSectionProps> = ({
                   </select>
                 </div>
 
-                {/* Custom Questions */}
-                {activeHiring.custom_questions &&
-                  activeHiring.custom_questions.map((q) => (
-                    <div key={q.id}>
-                      <label className="text-slate-300 font-medium block mb-1">
-                        {q.question} {q.required && <span className="text-red-400">*</span>}
-                      </label>
-                      {q.type === 'textarea' ? (
-                        <textarea
-                          required={q.required}
-                          rows={3}
-                          value={answers[q.id] || ''}
-                          onChange={(e) =>
-                            setAnswers({ ...answers, [q.id]: e.target.value })
-                          }
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 resize-none"
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          required={q.required}
-                          value={answers[q.id] || ''}
-                          onChange={(e) =>
-                            setAnswers({ ...answers, [q.id]: e.target.value })
-                          }
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
-                        />
-                      )}
-                    </div>
-                  ))}
+                {/* Non-duplicate custom questions */}
+                {relevantCustomQuestions.map((q) => (
+                  <div key={q.id}>
+                    <label className="text-slate-300 font-medium block mb-1">
+                      {q.question} {q.required && <span className="text-red-400">*</span>}
+                    </label>
+                    {q.type === 'textarea' ? (
+                      <textarea
+                        required={q.required}
+                        rows={3}
+                        value={answers[q.id] || ''}
+                        onChange={(e) =>
+                          setAnswers({ ...answers, [q.id]: e.target.value })
+                        }
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 resize-none"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        required={q.required}
+                        value={answers[q.id] || ''}
+                        onChange={(e) =>
+                          setAnswers({ ...answers, [q.id]: e.target.value })
+                        }
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    )}
+                  </div>
+                ))}
 
-                {/* Portfolio / Resume Link */}
+                {/* BUG-09 Fix: Consolidate into 1 required Resume/CV link & 1 optional Portfolio link */}
                 <div>
-                  <label className="text-slate-300 font-medium block mb-1">
-                    GitHub / Portfolio / Google Drive Resume Link
+                  <label className="text-slate-300 font-medium block mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <FileCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Resume / CV Document Link (Google Drive / PDF / Cloud)</span>
+                    </span>
+                    <span className="text-emerald-400 text-[10px]">Required</span>
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    placeholder="https://drive.google.com/file/d/..."
+                    value={resumeLink}
+                    onChange={(e) => setResumeLink(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Ensure link sharing permissions are set to "Anyone with the link can view".
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-medium block mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <LinkIcon className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Portfolio / GitHub / Behance Profile Link</span>
+                    </span>
+                    <span className="text-slate-500 text-[10px]">Optional</span>
                   </label>
                   <input
                     type="url"

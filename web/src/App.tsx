@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
-import { Profile, Hiring } from './types';
+import { Profile, Hiring, Event, Post, Society, Group } from './types';
 import { Navbar, NavTab } from './components/Navbar';
 import { FeedSection } from './components/FeedSection';
 import { SocietiesSection } from './components/SocietiesSection';
@@ -10,6 +10,9 @@ import { GroupsSection } from './components/GroupsSection';
 import { AdminSection } from './components/AdminSection';
 import { AuthModal } from './components/AuthModal';
 import { ProfileModal } from './components/ProfileModal';
+import { DownloadApkModal, APK_RELEASE_URL } from './components/DownloadApkModal';
+import { EventRegistrationModal } from './components/EventRegistrationModal';
+import { ToastProvider, useToast } from './components/Toast';
 import {
   Sparkles,
   Download,
@@ -17,13 +20,23 @@ import {
   Globe,
 } from 'lucide-react';
 
-export function App() {
+function AppContent() {
+  const { showToast } = useToast();
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [activeTab, setActiveTab] = useState<NavTab>('feed');
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [downloadApkOpen, setDownloadApkOpen] = useState(false);
   const [selectedHiringForApply, setSelectedHiringForApply] = useState<Hiring | null>(null);
+  const [selectedEventForRegister, setSelectedEventForRegister] = useState<Event | null>(null);
+
+  // BUG-08 Fix: In-memory cache for seamless, instant tab switching without blank card repaints
+  const [cachedPosts, setCachedPosts] = useState<Post[]>([]);
+  const [cachedEvents, setCachedEvents] = useState<Event[]>([]);
+  const [cachedSocieties, setCachedSocieties] = useState<Society[]>([]);
+  const [cachedHirings, setCachedHirings] = useState<Hiring[]>([]);
+  const [cachedGroups, setCachedGroups] = useState<Group[]>([]);
 
   // Initialize Auth & Profile
   useEffect(() => {
@@ -86,7 +99,9 @@ export function App() {
     setAuthModalOpen(true);
   };
 
+  // BUG-02 Fix: 1-Click Demo Login handler with visual toast confirmation
   const handleQuickDemoLogin = async () => {
+    showToast('Signing in as Test Student (2025@uet.edu.pk)...', 'info');
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: '2025@uet.edu.pk',
@@ -101,22 +116,22 @@ export function App() {
           .eq('id', data.user.id)
           .single();
 
-        if (profile) {
-          setCurrentUser(profile);
-        } else {
-          setCurrentUser({
-            id: data.user.id,
-            email: '2025@uet.edu.pk',
-            full_name: 'Test Student 2025',
-            roll_number: '2025-CS-25',
-            department: 'Computer Science',
-            semester: 2,
-            is_system_admin: true,
-          });
-        }
+        const userProfile = profile || {
+          id: data.user.id,
+          email: '2025@uet.edu.pk',
+          full_name: 'Test Student 2025',
+          roll_number: '2025-CS-25',
+          department: 'Computer Science',
+          semester: 2,
+          is_system_admin: true,
+        };
+
+        setCurrentUser(userProfile);
+        showToast('Signed in successfully as Test Student 2025!', 'success');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Quick demo login failed:', err);
+      showToast('Authentication error. Opening sign in modal...', 'error');
       handleOpenAuth('signin');
     }
   };
@@ -124,6 +139,7 @@ export function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
+    showToast('Signed out of student session.', 'info');
   };
 
   const handleApplyHiring = (hiring: Hiring) => {
@@ -133,9 +149,12 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Top Demo Banner for Visitors */}
+      {/* Top Demo Banner for Visitors (BUG-02 Fix: explicit button with click handler) */}
       {!currentUser && (
-        <aside aria-label="Demo Credentials Announcement" className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 border-b border-emerald-500/30 px-4 py-2 text-center text-xs">
+        <aside
+          aria-label="Demo Credentials Announcement"
+          className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 border-b border-emerald-500/30 px-4 py-2 text-center text-xs"
+        >
           <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 flex-wrap">
             <span className="flex items-center gap-1 text-emerald-400 font-semibold">
               <Sparkles className="w-3.5 h-3.5" /> Testing Credentials:
@@ -145,8 +164,9 @@ export function App() {
               <strong className="text-white">qwertyuiop123$</strong>
             </span>
             <button
+              type="button"
               onClick={handleQuickDemoLogin}
-              className="ml-2 px-2.5 py-0.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-semibold transition"
+              className="ml-2 px-3 py-1 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-semibold transition cursor-pointer"
             >
               Click to Auto Sign In &rarr;
             </button>
@@ -154,7 +174,7 @@ export function App() {
         </aside>
       )}
 
-      {/* Main Navigation */}
+      {/* Main Navigation (BUG-01 & BUG-02 fixes) */}
       <Navbar
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -163,6 +183,7 @@ export function App() {
         onOpenProfile={() => setProfileModalOpen(true)}
         onLogout={handleLogout}
         onQuickDemoLogin={handleQuickDemoLogin}
+        onOpenDownloadApk={() => setDownloadApkOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -173,6 +194,13 @@ export function App() {
             onRequireAuth={() => handleOpenAuth('signin')}
             onNavigateToCalendar={() => setActiveTab('calendar')}
             onNavigateToSocieties={() => setActiveTab('societies')}
+            onRegisterEvent={(evt) => setSelectedEventForRegister(evt)}
+            cachedPosts={cachedPosts}
+            cachedEvents={cachedEvents}
+            onCacheData={(posts, events) => {
+              setCachedPosts(posts);
+              setCachedEvents(events);
+            }}
           />
         )}
 
@@ -181,6 +209,8 @@ export function App() {
             currentUser={currentUser}
             onRequireAuth={() => handleOpenAuth('signin')}
             onApplyHiring={handleApplyHiring}
+            cachedSocieties={cachedSocieties}
+            onCacheSocieties={(socs) => setCachedSocieties(socs)}
           />
         )}
 
@@ -190,6 +220,8 @@ export function App() {
             onRequireAuth={() => handleOpenAuth('signin')}
             selectedHiringForApply={selectedHiringForApply}
             onClearSelectedHiring={() => setSelectedHiringForApply(null)}
+            cachedHirings={cachedHirings}
+            onCacheHirings={(hires) => setCachedHirings(hires)}
           />
         )}
 
@@ -197,6 +229,9 @@ export function App() {
           <CalendarSection
             currentUser={currentUser}
             onRequireAuth={() => handleOpenAuth('signin')}
+            onRegisterEvent={(evt) => setSelectedEventForRegister(evt)}
+            cachedEvents={cachedEvents}
+            onCacheEvents={(events) => setCachedEvents(events)}
           />
         )}
 
@@ -204,13 +239,15 @@ export function App() {
           <GroupsSection
             currentUser={currentUser}
             onRequireAuth={() => handleOpenAuth('signin')}
+            cachedGroups={cachedGroups}
+            onCacheGroups={(grps) => setCachedGroups(grps)}
           />
         )}
 
         {activeTab === 'admin' && <AdminSection currentUser={currentUser} />}
       </main>
 
-      {/* Footer */}
+      {/* Footer (BUG-01 Fix: triggers download modal and valid release download) */}
       <footer className="border-t border-slate-900 bg-slate-950/80 py-8 mt-12 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -220,15 +257,14 @@ export function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            <a
-              href="https://github.com/junaidqc/uet-societies-hub/releases/latest/download/app-release.apk"
-              target="_blank"
-              rel="noreferrer"
-              className="hover:text-emerald-400 flex items-center gap-1 transition"
+            <button
+              type="button"
+              onClick={() => setDownloadApkOpen(true)}
+              className="hover:text-emerald-400 flex items-center gap-1 transition cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Download Android APK</span>
-            </a>
+              <span>Download Android APK (v1.0.0)</span>
+            </button>
             <a
               href="https://github.com/junaidqc/uet-societies-hub"
               target="_blank"
@@ -256,7 +292,37 @@ export function App() {
         currentUser={currentUser}
         onProfileUpdated={(updated) => setCurrentUser(updated)}
       />
+
+      {/* BUG-01 Fix: Android APK Modal */}
+      <DownloadApkModal
+        isOpen={downloadApkOpen}
+        onClose={() => setDownloadApkOpen(false)}
+        onDownloadStarted={() => {
+          showToast('Starting Android APK download (36.7 MB)...', 'info');
+          setDownloadApkOpen(false);
+        }}
+      />
+
+      {/* BUG-03 Fix: Event Registration Modal */}
+      <EventRegistrationModal
+        isOpen={!!selectedEventForRegister}
+        onClose={() => setSelectedEventForRegister(null)}
+        event={selectedEventForRegister}
+        currentUser={currentUser}
+        onRequireAuth={() => {
+          setSelectedEventForRegister(null);
+          handleOpenAuth('signin');
+        }}
+      />
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
   );
 }
 

@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Compass,
   Search,
   Users,
-  CheckCircle,
-  ExternalLink,
   Mail,
   Globe,
   Calendar,
@@ -12,32 +9,36 @@ import {
   X,
   PlusCircle,
   ShieldCheck,
-  Heart,
-  ChevronRight,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Society, Profile, Post, Event, Hiring } from '../types';
+import { Society, Profile, Event, Hiring } from '../types';
+import { useToast } from './Toast';
 
 interface SocietiesSectionProps {
   currentUser: Profile | null;
   onRequireAuth: () => void;
   onApplyHiring: (hiring: Hiring) => void;
+  cachedSocieties?: Society[];
+  onCacheSocieties?: (societies: Society[]) => void;
 }
 
 export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
   currentUser,
   onRequireAuth,
   onApplyHiring,
+  cachedSocieties = [],
+  onCacheSocieties,
 }) => {
-  const [societies, setSocieties] = useState<Society[]>([]);
+  const { showToast } = useToast();
+  const [societies, setSocieties] = useState<Society[]>(cachedSocieties);
+  const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [followedSet, setFollowedSet] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(cachedSocieties.length === 0);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   // Society Detail Modal
   const [activeSociety, setActiveSociety] = useState<Society | null>(null);
-  const [societyPosts, setSocietyPosts] = useState<Post[]>([]);
   const [societyEvents, setSocietyEvents] = useState<Event[]>([]);
   const [societyHirings, setSocietyHirings] = useState<Hiring[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -51,7 +52,7 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
   const [submittingProp, setSubmittingProp] = useState(false);
 
   const fetchSocieties = async () => {
-    setLoading(true);
+    if (societies.length === 0) setLoading(true);
     try {
       // 1. Fetch societies
       const { data, error } = await supabase
@@ -62,7 +63,17 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
 
       if (error) throw error;
 
-      // 2. Fetch follower counts & user follows
+      // 2. Pre-fetch all events so Society modal has 0ms hydration for BUG-06
+      const { data: eventsData } = await supabase
+        .from('events')
+        .select('*, society:societies(*)')
+        .order('start_time', { ascending: true });
+
+      if (eventsData) {
+        setAllEvents(eventsData);
+      }
+
+      // 3. Fetch follower counts & user follows
       const { data: followsData } = await supabase.from('follows').select('society_id, user_id');
       const counts: Record<string, number> = {};
       const userFollows = new Set<string>();
@@ -81,6 +92,10 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
 
       setSocieties(processed);
       setFollowedSet(userFollows);
+
+      if (onCacheSocieties) {
+        onCacheSocieties(processed);
+      }
     } catch (err) {
       console.error('Error fetching societies:', err);
     } finally {
@@ -105,8 +120,10 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
 
     if (isFollowing) {
       nextSet.delete(society.id);
+      showToast(`Unfollowed ${society.name}`, 'info');
     } else {
       nextSet.add(society.id);
+      showToast(`Now following ${society.name}!`, 'success');
     }
     setFollowedSet(nextSet);
 
@@ -140,34 +157,41 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
     }
   };
 
-  // Open Society Detail
+  // Open Society Detail (BUG-06 fix: immediate hydration from pre-fetched events)
   const handleOpenDetail = async (society: Society) => {
+    // 1. Immediately hydrate events matching this society from memory (0ms delay)
+    const instantEvents = allEvents.filter((e) => e.society_id === society.id);
+    setSocietyEvents(instantEvents);
     setActiveSociety(society);
     setLoadingDetail(true);
+
     try {
-      // Fetch posts
-      const { data: pData } = await supabase
-        .from('posts')
-        .select('*')
-        .eq('society_id', society.id)
-        .order('created_at', { ascending: false });
-      setSocietyPosts(pData || []);
+      // 2. Fetch fresh events and hirings in parallel
+      const [eRes, hRes] = await Promise.all([
+        supabase
+          .from('events')
+          .select('*, society:societies(*)')
+          .eq('society_id', society.id)
+          .order('start_time', { ascending: true }),
+        supabase
+          .from('hirings')
+          .select('*, society:societies(*)') // BUG-05 fix: include society
+          .eq('society_id', society.id)
+          .eq('status', 'open'),
+      ]);
 
-      // Fetch events
-      const { data: eData } = await supabase
-        .from('events')
-        .select('*')
-        .eq('society_id', society.id)
-        .order('start_time', { ascending: true });
-      setSocietyEvents(eData || []);
+      if (eRes.data) {
+        setSocietyEvents(eRes.data);
+      }
 
-      // Fetch hirings
-      const { data: hData } = await supabase
-        .from('hirings')
-        .select('*')
-        .eq('society_id', society.id)
-        .eq('status', 'open');
-      setSocietyHirings(hData || []);
+      if (hRes.data) {
+        // Ensure society object is always attached to each hiring
+        const hiringsWithSociety = hRes.data.map((h) => ({
+          ...h,
+          society: h.society || society,
+        }));
+        setSocietyHirings(hiringsWithSociety);
+      }
     } catch (err) {
       console.error('Error fetching society details:', err);
     } finally {
@@ -198,14 +222,14 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
       });
 
       if (error) throw error;
-      alert('Your society charter proposal has been submitted to the Admin Directorate for approval!');
+      showToast('Society charter submitted to Admin Directorate for approval!', 'success');
       setProposeModalOpen(false);
       setPropName('');
       setPropDesc('');
       setPropEmail('');
     } catch (err: any) {
       console.error('Charter proposal error:', err);
-      alert(err.message || 'Failed to submit proposal.');
+      showToast(err.message || 'Failed to submit proposal.', 'error');
     } finally {
       setSubmittingProp(false);
     }
@@ -214,7 +238,9 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
   const categories = ['All', 'Technical', 'Literary', 'Social'];
 
   const filtered = societies.filter((s) => {
-    const matchesCat = selectedCategory === 'All' || s.category.toLowerCase().includes(selectedCategory.toLowerCase());
+    const matchesCat =
+      selectedCategory === 'All' ||
+      s.category.toLowerCase().includes(selectedCategory.toLowerCase());
     const matchesSearch =
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -266,14 +292,28 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
         </div>
       </div>
 
-      {/* Grid of Society Cards */}
+      {/* Grid of Society Cards (BUG-08: rich skeleton wireframes instead of blank dark boxes) */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
-              className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 h-64 animate-pulse"
-            />
+              className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 h-64 space-y-4 animate-pulse"
+            >
+              <div className="flex justify-between items-start">
+                <div className="w-12 h-12 rounded-2xl bg-slate-800" />
+                <div className="w-16 h-5 rounded-full bg-slate-800" />
+              </div>
+              <div className="h-5 w-40 bg-slate-800 rounded" />
+              <div className="space-y-2">
+                <div className="h-3 w-full bg-slate-800/60 rounded" />
+                <div className="h-3 w-4/5 bg-slate-800/60 rounded" />
+              </div>
+              <div className="pt-4 border-t border-slate-800/80 flex justify-between">
+                <div className="h-4 w-20 bg-slate-800 rounded" />
+                <div className="h-6 w-16 bg-slate-800 rounded" />
+              </div>
+            </div>
           ))}
         </div>
       ) : filtered.length > 0 ? (
@@ -413,7 +453,10 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
                         <button
                           onClick={() => {
                             setActiveSociety(null);
-                            onApplyHiring(h);
+                            onApplyHiring({
+                              ...h,
+                              society: activeSociety, // BUG-05 fix: always provide active society
+                            });
                           }}
                           className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
                         >
@@ -427,11 +470,11 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
                 )}
               </div>
 
-              {/* Upcoming Events */}
+              {/* BUG-06 Fix: Accurate Upcoming Events count and list */}
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-emerald-400" /> Upcoming Events (
-                  {societyEvents.length})
+                  {loadingDetail && societyEvents.length === 0 ? '...' : societyEvents.length})
                 </h4>
                 {societyEvents.length > 0 ? (
                   <div className="space-y-2">

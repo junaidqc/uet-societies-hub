@@ -12,9 +12,7 @@ import {
   Briefcase,
   Users,
   Compass,
-  MessageSquare,
   Home,
-  CheckCircle2,
 } from 'lucide-react';
 import { Profile } from '../types';
 
@@ -28,6 +26,7 @@ interface NavbarProps {
   onOpenProfile: () => void;
   onLogout: () => void;
   onQuickDemoLogin: () => void;
+  onOpenDownloadApk: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -38,6 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenProfile,
   onLogout,
   onQuickDemoLogin,
+  onOpenDownloadApk,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -109,24 +109,31 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right actions */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Download Android APK Button */}
-            <a
-              href="https://github.com/junaidqc/uet-societies-hub/releases/latest/download/app-release.apk"
-              target="_blank"
-              rel="noopener noreferrer"
+            {/* Download Android APK Button - Triggers Download APK Modal */}
+            <button
+              type="button"
+              onClick={onOpenDownloadApk}
               className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-xs font-semibold text-slate-200 hover:text-white transition"
-              title="Download Android APK"
+              title="Download Android APK (v1.0.0)"
             >
               <Download className="w-3.5 h-3.5 text-emerald-400" />
               <span>Android APK</span>
-            </a>
+            </button>
 
             {/* User State */}
             {currentUser ? (
               <div className="relative">
+                {/* Backdrop for closing dropdown on outside click (BUG-11 fix) */}
+                {userDropdownOpen && (
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setUserDropdownOpen(false)}
+                  />
+                )}
+
                 <button
                   onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                  className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 transition"
+                  className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 transition relative z-40"
                 >
                   <div className="w-7 h-7 rounded-lg bg-emerald-600/30 text-emerald-300 flex items-center justify-center font-bold text-xs uppercase">
                     {currentUser.full_name?.charAt(0) || 'U'}
@@ -200,6 +207,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="flex items-center gap-2">
                 {/* 1-Click Test ID */}
                 <button
+                  type="button"
                   onClick={onQuickDemoLogin}
                   className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-xs font-semibold text-emerald-300 transition"
                   title="Sign In with 2025@uet.edu.pk"
@@ -208,7 +216,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span>1-Click Test ID</span>
                 </button>
 
+                {/* Standard Sign In Button */}
                 <button
+                  type="button"
                   onClick={() => onOpenAuth('signin')}
                   className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-900/30 transition"
                 >
@@ -256,18 +266,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
 
           <div className="pt-3 border-t border-slate-800 flex flex-col gap-2">
-            <a
-              href="https://github.com/junaidqc/uet-societies-hub/releases/latest/download/app-release.apk"
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onOpenDownloadApk();
+              }}
               className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-slate-800 text-xs font-medium text-slate-200"
             >
               <Download className="w-4 h-4 text-emerald-400" />
               <span>Download Android APK</span>
-            </a>
+            </button>
 
             {!currentUser && (
               <button
+                type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   onQuickDemoLogin();

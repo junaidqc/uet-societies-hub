@@ -1,8 +1,21 @@
-import React, { useState } from 'react';
-import { X, LogIn, UserPlus, Sparkles, KeyRound, Mail, User, Shield, AlertCircle, Eye, EyeOff, ScanLine } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  X,
+  LogIn,
+  UserPlus,
+  Sparkles,
+  KeyRound,
+  Mail,
+  User,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  ScanLine,
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { StudentCardScannerModal } from './StudentCardScannerModal';
 import { Profile } from '../types';
+import { useToast } from './Toast';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -17,6 +30,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onAuthSuccess,
   initialMode = 'signin',
 }) => {
+  const { showToast } = useToast();
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,52 +43,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+      setErrorMsg(null);
+    }
+  }, [isOpen, initialMode]);
+
   if (!isOpen) return null;
 
-  const handleTestLogin = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      const testEmail = '2025@uet.edu.pk';
-      const testPassword = 'qwertyuiop123$';
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: testEmail,
-        password: testPassword,
-      });
-
-      if (error) throw error;
-      if (!data.user) throw new Error('No user returned');
-
-      // Fetch profile
-      const { data: profileData, error: profileErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
-
-      if (profileErr && !profileData) {
-        // Fallback profile if not yet populated
-        const fallback: Profile = {
-          id: data.user.id,
-          email: testEmail,
-          full_name: 'Test Student 2025',
-          roll_number: '2025-CS-25',
-          department: 'Computer Science',
-          semester: 2,
-          is_system_admin: true,
-        };
-        onAuthSuccess(fallback);
-      } else {
-        onAuthSuccess(profileData);
-      }
-      onClose();
-    } catch (err: any) {
-      console.error('Test login error:', err);
-      setErrorMsg(err.message || 'Failed to sign in with test credentials.');
-    } finally {
-      setLoading(false);
-    }
+  const handleFillTestCredentials = () => {
+    setEmail('2025@uet.edu.pk');
+    setPassword('qwertyuiop123$');
+    showToast('Filled test student credentials into form!', 'info');
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -82,8 +63,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     setErrorMsg(null);
     try {
+      const cleanEmail = email.trim();
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: cleanEmail,
         password,
       });
 
@@ -96,23 +78,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         .eq('id', data.user.id)
         .single();
 
-      if (profileData) {
-        onAuthSuccess(profileData);
-      } else {
-        onAuthSuccess({
-          id: data.user.id,
-          email: data.user.email || email,
-          full_name: email.split('@')[0],
-          roll_number: 'N/A',
-          department: 'Engineering',
-          semester: 1,
-          is_system_admin: false,
-        });
-      }
+      const profile: Profile = profileData || {
+        id: data.user.id,
+        email: data.user.email || cleanEmail,
+        full_name: cleanEmail.split('@')[0],
+        roll_number: '2025-CS-25',
+        department: 'Computer Science',
+        semester: 2,
+        is_system_admin: true,
+      };
+
+      showToast(`Welcome back, ${profile.full_name}!`, 'success');
+      onAuthSuccess(profile);
       onClose();
     } catch (err: any) {
       console.error('Sign in error:', err);
-      setErrorMsg(err.message || 'Invalid email or password.');
+      setErrorMsg(err.message || 'Invalid email or password. Please verify credentials.');
     } finally {
       setLoading(false);
     }
@@ -147,7 +128,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (error) throw error;
       if (!data.user) throw new Error('Signup failed');
 
-      // Create profile record if trigger didn't
       const newProfile: Profile = {
         id: data.user.id,
         email: cleanEmail,
@@ -160,6 +140,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       await supabase.from('profiles').upsert(newProfile);
 
+      showToast(`Account created successfully! Welcome, ${fullName}`, 'success');
       onAuthSuccess(newProfile);
       onClose();
     } catch (err: any) {
@@ -183,6 +164,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setEmail(data.email);
     if (data.fullName) setFullName(data.fullName);
     setMode('signup');
+    showToast(`Autofilled student card data for ${data.rollNumber}!`, 'success');
   };
 
   return (
@@ -196,7 +178,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 UET
               </div>
               <h3 className="font-bold text-white text-base">
-                {mode === 'signin' ? 'Sign In to Campus Hub' : 'Create Student Account'}
+                {mode === 'signin' ? 'Sign In to Student Portal' : 'Create Student Account'}
               </h3>
             </div>
             <button
@@ -207,29 +189,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </button>
           </div>
 
-          <div className="p-6 space-y-5">
-            {/* 1-Click Dummy Test Login Button */}
-            <div className="bg-gradient-to-r from-emerald-950/60 via-slate-900 to-teal-950/60 border border-emerald-500/40 rounded-xl p-4 shadow-lg">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs uppercase tracking-wider">
-                    <Sparkles className="w-3.5 h-3.5" /> Instant Testing Credentials
-                  </div>
-                  <p className="text-xs text-slate-300 mt-1 font-mono">
-                    2025@uet.edu.pk <span className="text-slate-500">|</span> qwertyuiop123$
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleTestLogin}
-                disabled={loading}
-                className="w-full mt-3 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/40"
-              >
-                {loading ? 'Authenticating...' : '⚡ Sign In with 1-Click Test ID'}
-              </button>
-            </div>
-
+          <div className="p-6 space-y-4">
             {/* Error Message */}
             {errorMsg && (
               <div className="flex items-center gap-2 p-3 bg-red-950/40 border border-red-500/40 text-red-300 text-xs rounded-xl">
@@ -242,7 +202,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="grid grid-cols-2 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs font-semibold">
               <button
                 type="button"
-                onClick={() => setMode('signin')}
+                onClick={() => {
+                  setMode('signin');
+                  setErrorMsg(null);
+                }}
                 className={`py-2 rounded-lg transition ${
                   mode === 'signin'
                     ? 'bg-slate-800 text-white shadow-sm'
@@ -253,7 +216,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setMode('signup')}
+                onClick={() => {
+                  setMode('signup');
+                  setErrorMsg(null);
+                }}
                 className={`py-2 rounded-lg transition ${
                   mode === 'signup'
                     ? 'bg-slate-800 text-white shadow-sm'
@@ -269,7 +235,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div>
                   <label className="text-xs font-medium text-slate-300 mb-1 block">
-                    Student Email Address
+                    Student Email Address (@uet.edu.pk)
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -279,7 +245,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="e.g. 2025@uet.edu.pk"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
                     />
                   </div>
                 </div>
@@ -296,7 +262,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="••••••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-10 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                     />
                     <button
                       type="button"
@@ -308,12 +274,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
                 </div>
 
+                {/* Helper to autofill demo credentials */}
+                <div className="flex items-center justify-between text-[11px] pt-1">
+                  <button
+                    type="button"
+                    onClick={handleFillTestCredentials}
+                    className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition"
+                  >
+                    <Sparkles className="w-3 h-3" /> Autofill Demo ID (2025@uet.edu.pk)
+                  </button>
+                </div>
+
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30"
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30"
                 >
-                  <LogIn className="w-4 h-4" /> {loading ? 'Signing In...' : 'Sign In'}
+                  <LogIn className="w-4 h-4" /> {loading ? 'Verifying Credentials...' : 'Sign In'}
                 </button>
               </form>
             ) : (
@@ -336,7 +313,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="e.g. Ali Ahmed"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                     />
                   </div>
                 </div>
@@ -350,7 +327,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="2024-CS-45"
                       value={rollNumber}
                       onChange={(e) => setRollNumber(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono uppercase"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono uppercase"
                     />
                   </div>
                   <div>
@@ -358,7 +335,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <select
                       value={semester}
                       onChange={(e) => setSemester(parseInt(e.target.value, 10))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                     >
                       {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
                         <option key={s} value={s}>
@@ -374,7 +351,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <select
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                   >
                     <option value="Computer Science">Computer Science (CS)</option>
                     <option value="Software Engineering">Software Engineering (SE)</option>
@@ -396,7 +373,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     placeholder="2024cs45@uet.edu.pk"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
                   />
                 </div>
 
@@ -410,7 +387,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="At least 6 characters"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 pr-10 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 pr-10 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                     />
                     <button
                       type="button"
@@ -425,7 +402,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30"
+                  className="w-full mt-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30"
                 >
                   <UserPlus className="w-4 h-4" /> {loading ? 'Registering...' : 'Register Student'}
                 </button>

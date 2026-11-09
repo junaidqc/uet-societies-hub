@@ -1,36 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import {
   Users,
-  MessageSquare,
   ShieldAlert,
   Send,
   Lock,
-  Sparkles,
-  Info,
   Clock,
   CheckCheck,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Group, GroupMessage, Profile } from '../types';
+import { useToast } from './Toast';
 
 interface GroupsSectionProps {
   currentUser: Profile | null;
   onRequireAuth: () => void;
+  cachedGroups?: Group[];
+  onCacheGroups?: (groups: Group[]) => void;
 }
 
 export const GroupsSection: React.FC<GroupsSectionProps> = ({
   currentUser,
   onRequireAuth,
+  cachedGroups = [],
+  onCacheGroups,
 }) => {
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const { showToast } = useToast();
+  const [groups, setGroups] = useState<Group[]>(cachedGroups);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(
+    cachedGroups.length > 0 ? cachedGroups[0] : null
+  );
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
   const fetchGroups = async () => {
-    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('groups')
@@ -41,15 +44,18 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
         .order('name', { ascending: true });
 
       if (error) throw error;
-      setGroups(data || []);
+      const processed = data || [];
+      setGroups(processed);
 
-      if (data && data.length > 0 && !selectedGroup) {
-        setSelectedGroup(data[0]);
+      if (onCacheGroups) {
+        onCacheGroups(processed);
+      }
+
+      if (processed.length > 0 && !selectedGroup) {
+        setSelectedGroup(processed[0]);
       }
     } catch (err) {
       console.error('Error fetching groups:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -74,7 +80,8 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
           id: 'demo-1',
           group_id: groupId,
           sender_id: 'system',
-          content: 'Welcome to the operational working group room. All committee discussions, task logs, and meeting agendas are synced here.',
+          content:
+            'Welcome to the operational working group room. All committee discussions, task logs, and meeting agendas are synced here.',
           created_at: new Date(Date.now() - 3600000).toISOString(),
           sender: {
             id: 'demo-system',
@@ -100,20 +107,24 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
     }
   }, [selectedGroup]);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // BUG-04 Fix: Unresponsive send button now accepts click, form submit, and keypress
+  const handleSendMessage = async (e?: React.SyntheticEvent) => {
+    if (e) e.preventDefault();
     if (!newMessage.trim() || !selectedGroup) return;
     if (!currentUser) {
       onRequireAuth();
       return;
     }
 
+    const contentToSend = newMessage.trim();
+    setNewMessage('');
     setSending(true);
+
     try {
       const payload = {
         group_id: selectedGroup.id,
         sender_id: currentUser.id,
-        content: newMessage.trim(),
+        content: contentToSend,
       };
 
       const { data, error } = await supabase
@@ -128,7 +139,7 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
           id: `local-${Date.now()}`,
           group_id: selectedGroup.id,
           sender_id: currentUser.id,
-          content: newMessage.trim(),
+          content: contentToSend,
           created_at: new Date().toISOString(),
           sender: currentUser,
         };
@@ -136,9 +147,10 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
       } else {
         setMessages((prev) => [...prev, data]);
       }
-      setNewMessage('');
+      showToast('Message sent to working group', 'success');
     } catch (err) {
       console.error('Send message failed:', err);
+      showToast('Failed to send message', 'error');
     } finally {
       setSending(false);
     }
@@ -271,23 +283,31 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
             )}
           </div>
 
-          {/* Message Input */}
+          {/* Message Input (BUG-04 Fix) */}
           <div className="p-4 border-t border-slate-800 bg-slate-950/60">
             {currentUser ? (
               <form onSubmit={handleSendMessage} className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Post an update to this committee channel..."
+                  placeholder="Post an update to this committee channel... (Press Enter or click Send)"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
                   className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                 />
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={(e) => handleSendMessage(e)}
                   disabled={sending || !newMessage.trim()}
-                  className="p-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl transition"
+                  className="p-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl transition cursor-pointer"
+                  title="Send message"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send className="w-4 h-4 pointer-events-none" />
                 </button>
               </form>
             ) : (

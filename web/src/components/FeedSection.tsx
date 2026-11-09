@@ -7,34 +7,39 @@ import {
   MapPin,
   Pin,
   Clock,
-  Sparkles,
   ChevronRight,
   PlusCircle,
   Send,
   X,
-  CheckCircle,
-  AlertCircle,
-  Filter,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Post, Event, Profile, PostComment } from '../types';
+import { useToast } from './Toast';
 
 interface FeedSectionProps {
   currentUser: Profile | null;
   onRequireAuth: () => void;
   onNavigateToCalendar: () => void;
   onNavigateToSocieties: () => void;
+  onRegisterEvent: (event: Event) => void;
+  cachedPosts?: Post[];
+  cachedEvents?: Event[];
+  onCacheData?: (posts: Post[], events: Event[]) => void;
 }
 
 export const FeedSection: React.FC<FeedSectionProps> = ({
   currentUser,
   onRequireAuth,
   onNavigateToCalendar,
-  onNavigateToSocieties,
+  onRegisterEvent,
+  cachedPosts = [],
+  cachedEvents = [],
+  onCacheData,
 }) => {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
+  const [posts, setPosts] = useState<Post[]>(cachedPosts);
+  const [events, setEvents] = useState<Event[]>(cachedEvents);
+  const [loading, setLoading] = useState(cachedPosts.length === 0);
   const [filterCategory, setFilterCategory] = useState<string>('all');
 
   // Comments modal state
@@ -53,7 +58,7 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
 
   // Fetch posts and events
   const fetchData = async () => {
-    setLoading(true);
+    if (posts.length === 0) setLoading(true);
     try {
       // 1. Fetch posts with society info
       const { data: postsData, error: postsErr } = await supabase
@@ -107,7 +112,12 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
         .order('start_time', { ascending: true })
         .limit(4);
 
-      setEvents(eventsData || []);
+      const processedEvents = eventsData || [];
+      setEvents(processedEvents);
+
+      if (onCacheData) {
+        onCacheData(processedPosts, processedEvents);
+      }
 
       // 4. Fetch societies list for create post modal
       const { data: socData } = await supabase
@@ -162,7 +172,6 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
       }
     } catch (err) {
       console.error('Like toggle failed:', err);
-      // Rollback on error
       fetchData();
     }
   };
@@ -187,9 +196,9 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
     }
   };
 
-  // Submit comment
-  const handleAddComment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Submit comment (BUG-10: supports Enter key and button click)
+  const handleAddComment = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!newCommentText.trim() || !activeCommentsPost) return;
     if (!currentUser) {
       onRequireAuth();
@@ -214,6 +223,7 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
 
       setComments((prev) => [...prev, data]);
       setNewCommentText('');
+      showToast('Comment posted successfully!', 'success');
 
       // Update post comment count optimistically
       setPosts((prev) =>
@@ -225,8 +235,40 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
       );
     } catch (err) {
       console.error('Error posting comment:', err);
+      showToast('Failed to post comment.', 'error');
     } finally {
       setSubmittingComment(false);
+    }
+  };
+
+  // BUG-12: Share button with visual toast feedback
+  const handleSharePost = async (post: Post) => {
+    const shareUrl = window.location.href;
+    const shareText = `${post.title} | UET Societies Hub`;
+
+    if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+        showToast('Link copied to clipboard!', 'success');
+        return;
+      } catch (err) {
+        console.warn('Clipboard write error:', err);
+      }
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: post.title,
+          text: post.content.slice(0, 100),
+          url: shareUrl,
+        });
+        showToast('Shared successfully!', 'success');
+      } catch (e) {
+        // Ignored if cancelled
+      }
+    } else {
+      showToast('Link copied to clipboard!', 'success');
     }
   };
 
@@ -266,9 +308,10 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
       setCreatePostOpen(false);
       setNewPostTitle('');
       setNewPostContent('');
+      showToast('Announcement published successfully!', 'success');
     } catch (err: any) {
       console.error('Error creating post:', err);
-      alert(err.message || 'Failed to create post. Only society admins can publish.');
+      showToast(err.message || 'Failed to create post. Only society admins can publish.', 'error');
     } finally {
       setSubmittingPost(false);
     }
@@ -346,16 +389,15 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
                       <span className="truncate">{evt.venue}</span>
                     </span>
 
-                    {evt.registration_link && (
-                      <a
-                        href={evt.registration_link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs font-semibold text-emerald-400 hover:underline"
-                      >
-                        Register &rarr;
-                      </a>
-                    )}
+                    {/* BUG-03: Route event registration through internal registration modal */}
+                    <button
+                      type="button"
+                      onClick={() => onRegisterEvent(evt)}
+                      className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1"
+                    >
+                      <span>Register</span>
+                      <span>&rarr;</span>
+                    </button>
                   </div>
                 </div>
               );
@@ -404,14 +446,31 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
         )}
       </div>
 
-      {/* Posts List */}
+      {/* BUG-08 Fix: Beautiful Skeleton Wireframes with Shimmer Content instead of Blank Dark Rectangles */}
       {loading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 animate-pulse h-48"
-            />
+              className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 space-y-4 animate-pulse"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-slate-800" />
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-4 w-40 bg-slate-800 rounded" />
+                  <div className="h-3 w-24 bg-slate-800/60 rounded" />
+                </div>
+              </div>
+              <div className="h-5 w-3/4 bg-slate-800 rounded" />
+              <div className="space-y-2">
+                <div className="h-3.5 w-full bg-slate-800/70 rounded" />
+                <div className="h-3.5 w-5/6 bg-slate-800/70 rounded" />
+              </div>
+              <div className="pt-3 border-t border-slate-800 flex justify-between">
+                <div className="h-6 w-20 bg-slate-800 rounded" />
+                <div className="h-6 w-8 bg-slate-800 rounded" />
+              </div>
+            </div>
           ))}
         </div>
       ) : filteredPosts.length > 0 ? (
@@ -499,21 +558,11 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
                     </button>
                   </div>
 
+                  {/* BUG-12: Share button with visual toast */}
                   <button
-                    onClick={() => {
-                      if (navigator.share) {
-                        navigator.share({
-                          title: post.title,
-                          text: post.content,
-                          url: window.location.href,
-                        });
-                      } else {
-                        navigator.clipboard.writeText(`${post.title}\n\n${window.location.href}`);
-                        alert('Link copied to clipboard!');
-                      }
-                    }}
+                    onClick={() => handleSharePost(post)}
                     className="p-1.5 rounded-lg hover:text-white hover:bg-slate-800/60 transition"
-                    title="Share announcement"
+                    title="Share announcement link"
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
@@ -579,23 +628,31 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
               )}
             </div>
 
-            {/* Add Comment Input */}
+            {/* Add Comment Input (BUG-10: handles Enter key and Send button) */}
             <div className="p-4 border-t border-slate-800 bg-slate-950/60">
               {currentUser ? (
                 <form onSubmit={handleAddComment} className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Write a comment as student..."
+                    placeholder="Write a comment as student... (Press Enter to post)"
                     value={newCommentText}
                     onChange={(e) => setNewCommentText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleAddComment();
+                      }
+                    }}
                     className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                   />
                   <button
                     type="submit"
+                    onClick={() => handleAddComment()}
                     disabled={submittingComment || !newCommentText.trim()}
                     className="p-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl transition"
+                    title="Send comment"
                   >
-                    <Send className="w-4 h-4" />
+                    <Send className="w-4 h-4 pointer-events-none" />
                   </button>
                 </form>
               ) : (
