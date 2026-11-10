@@ -93,6 +93,13 @@ function AppContent() {
     };
   }, []);
 
+  // Automatically close auth modal if user becomes authenticated (e.g. via email link or OTP)
+  useEffect(() => {
+    if (currentUser) {
+      setAuthModalOpen(false);
+    }
+  }, [currentUser]);
+
   const handleOpenAuth = (mode: 'signin' | 'signup' = 'signin') => {
     setAuthMode(mode);
     setAuthModalOpen(true);
