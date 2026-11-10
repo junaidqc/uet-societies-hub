@@ -161,8 +161,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     try {
-      const redirectUrl = window.location.origin + window.location.pathname;
-
       // 1. Register student in DB (stores metadata & generates 6-digit OTP in public.student_email_verifications)
       const { data: regData, error: regErr } = await supabase.rpc('register_student_account', {
         p_email: cleanEmail,
@@ -182,37 +180,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw regErr;
       }
 
-      // 2. Dispatch real outbound confirmation email via Supabase GoTrue
-      let emailDispatched = true;
+      // Try optional outbound confirmation email via Supabase GoTrue resend
       try {
-        const { error: signUpErr } = await supabase.auth.signUp({
+        const redirectUrl = window.location.origin + window.location.pathname;
+        await supabase.auth.resend({
+          type: 'signup',
           email: cleanEmail,
-          password: password,
-          options: {
-            emailRedirectTo: redirectUrl,
-            data: {
-              full_name: fullName.trim(),
-              roll_number: rollNumber.trim().toUpperCase(),
-              department,
-              semester: Number(semester),
-            },
-          },
+          options: { emailRedirectTo: redirectUrl },
         });
-        if (signUpErr) {
-          // If already in auth.users from RPC, try resend to trigger the email
-          const { error: resendErr } = await supabase.auth.resend({
-            type: 'signup',
-            email: cleanEmail,
-            options: { emailRedirectTo: redirectUrl },
-          });
-          if (resendErr) {
-            console.warn('Outbound email note:', resendErr.message);
-            emailDispatched = false;
-          }
-        }
       } catch (mailErr) {
         console.warn('Mail dispatch note:', mailErr);
-        emailDispatched = false;
       }
 
       // STRICT VERIFICATION: DO NOT LOG IN YET.
@@ -226,11 +203,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setResendCountdown(60);
       setMode('verify_otp');
 
-      if (emailDispatched) {
-        showToast('Confirmation email sent! Check your inbox or activate with the code below.', 'success');
-      } else {
-        showToast('Account registered! Use the activation code below to activate immediately.', 'info');
-      }
+      showToast('Registration initiated! Enter your 6-digit verification code below to activate your account.', 'info');
     } catch (err: any) {
       console.error('Sign up error:', err);
       setErrorMsg(err.message || 'Failed to create student account.');
@@ -251,7 +224,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
       // 1. Verify OTP and confirm user in auth.users
-      const { error: vErr } = await supabase.rpc('verify_student_email_otp', {
+      const { data: vData, error: vErr } = await supabase.rpc('verify_student_email_otp', {
         p_email: pendingVerificationEmail,
         p_otp: activeCode,
       });
@@ -259,34 +232,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (vErr) throw vErr;
 
       // 2. Now that user is confirmed, sign in to establish real authenticated JWT session
-      const { data: loginData, error: loginErr } = await supabase.auth.signInWithPassword({
-        email: pendingVerificationEmail,
-        password: pendingPassword,
-      });
+      if (pendingPassword) {
+        const { data: loginData, error: loginErr } = await supabase.auth.signInWithPassword({
+          email: pendingVerificationEmail,
+          password: pendingPassword,
+        });
 
-      if (loginErr) throw loginErr;
-      if (!loginData.user) throw new Error('Authentication failed after verification.');
+        if (!loginErr && loginData?.user) {
+          // Retrieve verified student profile
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', loginData.user.id)
+            .single();
 
-      // 3. Retrieve verified student profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', loginData.user.id)
-        .single();
+          const profile: Profile = profileData || {
+            id: loginData.user.id,
+            email: pendingVerificationEmail,
+            full_name: fullName || 'UET Student',
+            roll_number: rollNumber || 'N/A',
+            department,
+            semester,
+            is_system_admin: false,
+          };
 
-      const profile: Profile = profileData || {
-        id: loginData.user.id,
-        email: pendingVerificationEmail,
-        full_name: fullName || 'UET Student',
-        roll_number: rollNumber || 'N/A',
-        department,
-        semester,
-        is_system_admin: false,
-      };
+          showToast(`Account verified & activated! Welcome, ${profile.full_name}!`, 'success');
+          onAuthSuccess(profile);
+          onClose();
+          return;
+        }
+      }
 
-      showToast(`Account verified & activated! Welcome, ${profile.full_name}!`, 'success');
-      onAuthSuccess(profile);
-      onClose();
+      // If pendingPassword was not in memory or signInWithPassword needs manual password,
+      // OTP verification already succeeded! Guide student smoothly to Sign In.
+      showToast('Email verified successfully! Please enter your password to sign in.', 'success');
+      setEmail(pendingVerificationEmail);
+      setPassword('');
+      setMode('signin');
     } catch (err: any) {
       console.error('OTP verification error:', err);
       setErrorMsg(err.message || 'Incorrect or expired verification code. Please try again.');
@@ -454,7 +436,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         {campusOtpPreview}
                       </div>
                       <div className="text-[10px] text-slate-400">
-                        Valid for 15 minutes • Instant access
+                        Valid for 30 minutes • Instant access
                       </div>
                     </div>
                     <button
