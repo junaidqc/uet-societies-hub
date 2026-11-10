@@ -15,8 +15,10 @@ class Validators {
     if (!emailRegex.hasMatch(trimmed)) {
       return 'Please enter a valid email address';
     }
-    if (!SupabaseConfig.isDemoHost && !trimmed.endsWith('@uet.edu.pk')) {
-      return 'Must be an official @uet.edu.pk email address';
+    if (!SupabaseConfig.isDemoHost &&
+        !trimmed.endsWith('@uet.edu.pk') &&
+        !trimmed.endsWith('@student.uet.edu.pk')) {
+      return 'Must be an official @uet.edu.pk or @student.uet.edu.pk email address';
     }
     return null;
   }

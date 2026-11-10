@@ -59,7 +59,7 @@ export const StudentCardScannerModal: React.FC<StudentCardScannerModalProps> = (
     }
 
     const emailUser = cleaned.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const email = `${emailUser}@uet.edu.pk`;
+    const email = `${emailUser}@student.uet.edu.pk`;
 
     return {
       rollNumber: cleaned,
@@ -73,7 +73,7 @@ export const StudentCardScannerModal: React.FC<StudentCardScannerModalProps> = (
   const handleSelectSample = (sample: typeof SAMPLE_CARDS[0]) => {
     setIsScanning(true);
     setTimeout(() => {
-      const email = sample.roll.toLowerCase().replace(/[^a-z0-9]/g, '') + '@uet.edu.pk';
+      const email = sample.roll.toLowerCase().replace(/[^a-z0-9]/g, '') + '@student.uet.edu.pk';
       const parsed = {
         rollNumber: sample.roll,
         department: sample.dept,

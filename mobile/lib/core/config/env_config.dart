@@ -14,4 +14,6 @@ class EnvConfig {
 
   static const String appName = 'UET Societies Hub';
   static const String uetEmailDomain = '@uet.edu.pk';
+  static const String uetStudentEmailDomain = '@student.uet.edu.pk';
+  static const List<String> validEmailDomains = ['@uet.edu.pk', '@student.uet.edu.pk'];
 }

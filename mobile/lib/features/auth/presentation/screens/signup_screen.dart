@@ -469,7 +469,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 AppTextField(
                   controller: _emailController,
                   label: AppStrings.email,
-                  hint: 'e.g. 2022cs101@uet.edu.pk',
+                  hint: 'e.g. 2024cs45@student.uet.edu.pk',
                   keyboardType: TextInputType.emailAddress,
                   prefixIcon: Icons.email_outlined,
                   validator: Validators.validateUetEmail,
@@ -508,7 +508,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
                 // Submit Button
                 AppButton(
-                  text: 'Register with @uet.edu.pk',
+                  text: 'Register with Official Email',
                   icon: Icons.how_to_reg_rounded,
                   isLoading: authState.isLoading,
                   onPressed: _handleSignUp,

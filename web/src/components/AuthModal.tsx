@@ -97,9 +97,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     setErrorMsg(null);
 
-    const cleanEmail = email.trim();
-    if (!cleanEmail.endsWith('@uet.edu.pk')) {
-      setErrorMsg('Please use an official UET student email address (ending with @uet.edu.pk)');
+    const cleanEmail = email.trim().toLowerCase();
+    const isValidDomain = cleanEmail.endsWith('@uet.edu.pk') || cleanEmail.endsWith('@student.uet.edu.pk');
+    if (!isValidDomain) {
+      setErrorMsg('Please use an official UET student email address (ending with @uet.edu.pk or @student.uet.edu.pk)');
       setLoading(false);
       return;
     }
@@ -228,14 +229,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div>
                   <label className="text-xs font-medium text-slate-300 mb-1 block">
-                    Student Email Address (@uet.edu.pk)
+                    Student Email (@uet.edu.pk or @student.uet.edu.pk)
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
                     <input
                       type="email"
                       required
-                      placeholder="student@uet.edu.pk"
+                      placeholder="student@student.uet.edu.pk"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
@@ -347,12 +348,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                 <div>
                   <label className="text-xs font-medium text-slate-300 mb-1 block">
-                    Student Email (@uet.edu.pk)
+                    Student Email (@uet.edu.pk or @student.uet.edu.pk)
                   </label>
                   <input
                     type="email"
                     required
-                    placeholder="2024cs45@uet.edu.pk"
+                    placeholder="2024cs45@student.uet.edu.pk"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"

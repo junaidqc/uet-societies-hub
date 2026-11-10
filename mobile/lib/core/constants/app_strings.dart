@@ -4,9 +4,9 @@ class AppStrings {
   
   // Auth Strings
   static const String welcomeBack = 'Welcome Back';
-  static const String loginSubtitle = 'Sign in with your official UET student credentials';
+  static const String loginSubtitle = 'Sign in with your official UET credentials (@uet.edu.pk or @student.uet.edu.pk)';
   static const String createAccount = 'Create Account';
-  static const String signupSubtitle = 'Register with your @uet.edu.pk email';
+  static const String signupSubtitle = 'Register with your official UET email (@uet.edu.pk / @student.uet.edu.pk)';
   static const String continueAsGuest = 'Continue as Guest';
   static const String login = 'Log In';
   static const String signup = 'Sign Up';
@@ -37,5 +37,5 @@ class AppStrings {
 
   // Guest Prompts
   static const String guestActionTitle = 'Account Required';
-  static const String guestActionPrompt = 'You need a verified @uet.edu.pk account to follow societies, join groups, or submit job applications.';
+  static const String guestActionPrompt = 'You need a verified UET account (@uet.edu.pk or @student.uet.edu.pk) to follow societies, join groups, or submit job applications.';
 }
