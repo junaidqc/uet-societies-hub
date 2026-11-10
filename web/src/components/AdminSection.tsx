@@ -39,11 +39,11 @@ export const AdminSection: React.FC<AdminSectionProps> = ({ currentUser }) => {
     setLoading(true);
     try {
       const results = await Promise.allSettled([
-        supabase.from('profiles').select('id', { count: 'exact' }),
-        supabase.from('societies').select('id', { count: 'exact' }).eq('status', 'active'),
-        supabase.from('societies').select('id', { count: 'exact' }).eq('status', 'pending'),
-        supabase.from('events').select('id', { count: 'exact' }),
-        supabase.from('applications').select('id', { count: 'exact' }),
+        supabase.from('profiles').select('id', { count: 'exact' }).limit(1),
+        supabase.from('societies').select('id', { count: 'exact' }).eq('status', 'active').limit(1),
+        supabase.from('societies').select('id', { count: 'exact' }).eq('status', 'pending').limit(1),
+        supabase.from('events').select('id', { count: 'exact' }).limit(1),
+        supabase.from('applications').select('id', { count: 'exact' }).limit(1),
       ]);
 
       const getCount = (

@@ -125,8 +125,13 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({
   };
 
   const getGoogleCalendarUrl = (event: Event) => {
-    const startTime = new Date(event.start_time).toISOString().replace(/-|:|\.\d\d\d/g, '');
-    const endTime = new Date(event.end_time).toISOString().replace(/-|:|\.\d\d\d/g, '');
+    const start = new Date(event.start_time);
+    const end = event.end_time
+      ? new Date(event.end_time)
+      : new Date(start.getTime() + 3 * 3600 * 1000);
+
+    const startTime = start.toISOString().replace(/-|:|\.\d\d\d/g, '');
+    const endTime = end.toISOString().replace(/-|:|\.\d\d\d/g, '');
     const text = encodeURIComponent(event.title);
     const details = encodeURIComponent(
       `${event.description}\n\nOrganized by: ${event.society?.name || 'UET Campus'}`

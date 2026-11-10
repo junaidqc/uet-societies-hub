@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   GraduationCap,
-  Sparkles,
   Download,
   User,
   LogOut,
@@ -25,7 +24,6 @@ interface NavbarProps {
   onOpenAuth: (mode?: 'signin' | 'signup') => void;
   onOpenProfile: () => void;
   onLogout: () => void;
-  onQuickDemoLogin: () => void;
   onOpenDownloadApk: () => void;
 }
 
@@ -36,7 +34,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuth,
   onOpenProfile,
   onLogout,
-  onQuickDemoLogin,
   onOpenDownloadApk,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -205,24 +202,20 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                {/* 1-Click Test ID */}
-                <button
-                  type="button"
-                  onClick={onQuickDemoLogin}
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-xs font-semibold text-emerald-300 transition"
-                  title="Sign In with 2025@uet.edu.pk"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>1-Click Test ID</span>
-                </button>
-
                 {/* Standard Sign In Button */}
                 <button
                   type="button"
                   onClick={() => onOpenAuth('signin')}
-                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-900/30 transition"
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-900/30 transition cursor-pointer"
                 >
                   Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenAuth('signup')}
+                  className="hidden sm:inline-flex px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-semibold transition cursor-pointer"
+                >
+                  Register
                 </button>
               </div>
             )}
@@ -283,12 +276,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  onQuickDemoLogin();
+                  onOpenAuth('signin');
                 }}
-                className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-xs font-semibold text-emerald-300"
+                className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-emerald-600 text-white text-xs font-semibold"
               >
-                <Sparkles className="w-4 h-4 text-emerald-400" />
-                <span>1-Click Test ID (2025@uet.edu.pk)</span>
+                <span>Student Sign In</span>
               </button>
             )}
           </div>

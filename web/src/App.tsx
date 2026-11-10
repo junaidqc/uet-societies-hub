@@ -14,7 +14,6 @@ import { DownloadApkModal, APK_RELEASE_URL } from './components/DownloadApkModal
 import { EventRegistrationModal } from './components/EventRegistrationModal';
 import { ToastProvider, useToast } from './components/Toast';
 import {
-  Sparkles,
   Download,
   GraduationCap,
   Globe,
@@ -59,10 +58,10 @@ function AppContent() {
             setCurrentUser({
               id: session.user.id,
               email: session.user.email || '',
-              full_name: 'Student',
-              roll_number: 'N/A',
-              department: 'Engineering',
-              semester: 1,
+              full_name: session.user.user_metadata?.full_name || 'Student',
+              roll_number: session.user.user_metadata?.roll_number || 'N/A',
+              department: session.user.user_metadata?.department || 'Engineering',
+              semester: session.user.user_metadata?.semester || 1,
               is_system_admin: false,
             });
           }
@@ -99,43 +98,6 @@ function AppContent() {
     setAuthModalOpen(true);
   };
 
-  // BUG-02 Fix: 1-Click Demo Login handler with visual toast confirmation
-  const handleQuickDemoLogin = async () => {
-    showToast('Signing in as Test Student (2025@uet.edu.pk)...', 'info');
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: '2025@uet.edu.pk',
-        password: 'qwertyuiop123$',
-      });
-
-      if (error) throw error;
-      if (data.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-
-        const userProfile = profile || {
-          id: data.user.id,
-          email: '2025@uet.edu.pk',
-          full_name: 'Test Student 2025',
-          roll_number: '2025-CS-25',
-          department: 'Computer Science',
-          semester: 2,
-          is_system_admin: true,
-        };
-
-        setCurrentUser(userProfile);
-        showToast('Signed in successfully as Test Student 2025!', 'success');
-      }
-    } catch (err: any) {
-      console.error('Quick demo login failed:', err);
-      showToast('Authentication error. Opening sign in modal...', 'error');
-      handleOpenAuth('signin');
-    }
-  };
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
@@ -149,32 +111,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Top Demo Banner for Visitors (BUG-02 Fix: explicit button with click handler) */}
-      {!currentUser && (
-        <aside
-          aria-label="Demo Credentials Announcement"
-          className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 border-b border-emerald-500/30 px-4 py-2 text-center text-xs"
-        >
-          <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 flex-wrap">
-            <span className="flex items-center gap-1 text-emerald-400 font-semibold">
-              <Sparkles className="w-3.5 h-3.5" /> Testing Credentials:
-            </span>
-            <span className="font-mono text-slate-300">
-              ID: <strong className="text-white">2025@uet.edu.pk</strong> | Pass:{' '}
-              <strong className="text-white">qwertyuiop123$</strong>
-            </span>
-            <button
-              type="button"
-              onClick={handleQuickDemoLogin}
-              className="ml-2 px-3 py-1 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-semibold transition cursor-pointer"
-            >
-              Click to Auto Sign In &rarr;
-            </button>
-          </div>
-        </aside>
-      )}
-
-      {/* Main Navigation (BUG-01 & BUG-02 fixes) */}
+      {/* Main Navigation */}
       <Navbar
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -182,7 +119,6 @@ function AppContent() {
         onOpenAuth={handleOpenAuth}
         onOpenProfile={() => setProfileModalOpen(true)}
         onLogout={handleLogout}
-        onQuickDemoLogin={handleQuickDemoLogin}
         onOpenDownloadApk={() => setDownloadApkOpen(true)}
       />
 

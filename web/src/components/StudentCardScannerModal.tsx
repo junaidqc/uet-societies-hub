@@ -14,7 +14,7 @@ interface StudentCardScannerModalProps {
 }
 
 const SAMPLE_CARDS = [
-  { roll: '2025-CS-25', dept: 'Computer Science', semester: 2, name: 'Test Student 2025' },
+  { roll: '2025-CS-25', dept: 'Computer Science', semester: 2, name: 'Muhammad Zain' },
   { roll: '2022-CS-142', dept: 'Computer Science', semester: 8, name: 'Hamza Arshad' },
   { roll: '2023-EE-089', dept: 'Electrical Engineering', semester: 6, name: 'Ayesha Fatima' },
   { roll: '2024-ME-045', dept: 'Mechanical Engineering', semester: 4, name: 'Bilal Khan' },
@@ -147,7 +147,7 @@ export const StudentCardScannerModal: React.FC<StudentCardScannerModalProps> = (
           {/* Quick Preset Samples */}
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Or select a test student card:
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Or select a sample student card:
             </label>
             <div className="grid grid-cols-2 gap-2 mt-1">
               {SAMPLE_CARDS.map((sample) => (

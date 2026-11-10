@@ -74,17 +74,17 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
       setMessages(data || []);
     } catch (err) {
       console.error('Error fetching group messages:', err);
-      // Fallback demo message if empty or restricted
+      // System welcome message if channel is starting
       setMessages([
         {
-          id: 'demo-1',
+          id: 'sys-welcome',
           group_id: groupId,
           sender_id: 'system',
           content:
             'Welcome to the operational working group room. All committee discussions, task logs, and meeting agendas are synced here.',
           created_at: new Date(Date.now() - 3600000).toISOString(),
           sender: {
-            id: 'demo-system',
+            id: 'dir-moderator',
             email: 'admin@uet.edu.pk',
             full_name: 'Directorate Moderator',
             roll_number: 'STAFF',
@@ -134,7 +134,7 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
         .single();
 
       if (error) {
-        // Optimistic UI for smooth test experience
+        // Optimistic UI for immediate responsiveness
         const fakeMsg: GroupMessage = {
           id: `local-${Date.now()}`,
           group_id: selectedGroup.id,

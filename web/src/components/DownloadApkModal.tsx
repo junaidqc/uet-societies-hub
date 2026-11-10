@@ -90,7 +90,7 @@ export const DownloadApkModal: React.FC<DownloadApkModalProps> = ({
               <li>Click the download button above.</li>
               <li>Pull down notifications on your Android device and tap <code className="text-emerald-300">app-release.apk</code>.</li>
               <li>Tap <strong>Install</strong> (enable "Install unknown apps" if prompted).</li>
-              <li>Open the app and test with <code className="text-emerald-300">2025@uet.edu.pk</code>.</li>
+              <li>Open the app and sign in with your official UET student credentials.</li>
             </ol>
           </div>
         </div>

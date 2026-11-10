@@ -31,6 +31,7 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
   currentUser,
   onRequireAuth,
   onNavigateToCalendar,
+  onNavigateToSocieties,
   onRegisterEvent,
   cachedPosts = [],
   cachedEvents = [],

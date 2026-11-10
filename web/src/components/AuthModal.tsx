@@ -3,7 +3,6 @@ import {
   X,
   LogIn,
   UserPlus,
-  Sparkles,
   KeyRound,
   Mail,
   User,
@@ -52,12 +51,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleFillTestCredentials = () => {
-    setEmail('2025@uet.edu.pk');
-    setPassword('qwertyuiop123$');
-    showToast('Filled test student credentials into form!', 'info');
-  };
-
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -81,11 +74,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const profile: Profile = profileData || {
         id: data.user.id,
         email: data.user.email || cleanEmail,
-        full_name: cleanEmail.split('@')[0],
-        roll_number: '2025-CS-25',
-        department: 'Computer Science',
-        semester: 2,
-        is_system_admin: true,
+        full_name: data.user.user_metadata?.full_name || cleanEmail.split('@')[0],
+        roll_number: data.user.user_metadata?.roll_number || 'N/A',
+        department: data.user.user_metadata?.department || 'Engineering',
+        semester: data.user.user_metadata?.semester || 1,
+        is_system_admin: false,
       };
 
       showToast(`Welcome back, ${profile.full_name}!`, 'success');
@@ -242,7 +235,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <input
                       type="email"
                       required
-                      placeholder="e.g. 2025@uet.edu.pk"
+                      placeholder="student@uet.edu.pk"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
@@ -272,17 +265,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                </div>
-
-                {/* Helper to autofill demo credentials */}
-                <div className="flex items-center justify-between text-[11px] pt-1">
-                  <button
-                    type="button"
-                    onClick={handleFillTestCredentials}
-                    className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition"
-                  >
-                    <Sparkles className="w-3 h-3" /> Autofill Demo ID (2025@uet.edu.pk)
-                  </button>
                 </div>
 
                 <button
