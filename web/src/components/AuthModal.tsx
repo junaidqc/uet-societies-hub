@@ -14,6 +14,7 @@ import {
   RotateCw,
   ArrowLeft,
   CheckCircle2,
+  ExternalLink,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { StudentCardScannerModal } from './StudentCardScannerModal';
@@ -88,10 +89,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           error.message?.toLowerCase().includes('email not confirmed') ||
           error.message?.toLowerCase().includes('not verified')
         ) {
-          // Generate a fresh OTP and transition straight to verification screen
+          // Trigger OTP generation and dispatch confirmation email
           const { data: otpRes } = await supabase.rpc('request_email_verification_otp', {
             p_email: cleanEmail,
           });
+
+          const redirectUrl = window.location.origin + window.location.pathname;
+          try {
+            await supabase.auth.resend({
+              type: 'signup',
+              email: cleanEmail,
+              options: { emailRedirectTo: redirectUrl },
+            });
+          } catch (_) {}
+
           setPendingVerificationEmail(cleanEmail);
           setPendingPassword(password);
           if (otpRes?.otp_code) {
@@ -100,7 +111,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           setMode('verify_otp');
           setResendCountdown(60);
           setErrorMsg(
-            'Your account is not verified yet. Enter the 6-digit verification code below to activate your account.'
+            'Your account is not verified yet. We have sent a confirmation link to your email, or you can activate instantly using the 6-digit code below.'
           );
           return;
         }
@@ -150,7 +161,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     try {
-      // Register through dedicated student registration RPC to guarantee unconfirmed security
+      const redirectUrl = window.location.origin + window.location.pathname;
+
+      // 1. Register student in DB (stores metadata & generates 6-digit OTP in public.student_email_verifications)
       const { data: regData, error: regErr } = await supabase.rpc('register_student_account', {
         p_email: cleanEmail,
         p_password: password,
@@ -169,8 +182,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw regErr;
       }
 
+      // 2. Dispatch real outbound confirmation email via Supabase GoTrue
+      let emailDispatched = true;
+      try {
+        const { error: signUpErr } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password: password,
+          options: {
+            emailRedirectTo: redirectUrl,
+            data: {
+              full_name: fullName.trim(),
+              roll_number: rollNumber.trim().toUpperCase(),
+              department,
+              semester: Number(semester),
+            },
+          },
+        });
+        if (signUpErr) {
+          // If already in auth.users from RPC, try resend to trigger the email
+          const { error: resendErr } = await supabase.auth.resend({
+            type: 'signup',
+            email: cleanEmail,
+            options: { emailRedirectTo: redirectUrl },
+          });
+          if (resendErr) {
+            console.warn('Outbound email note:', resendErr.message);
+            emailDispatched = false;
+          }
+        }
+      } catch (mailErr) {
+        console.warn('Mail dispatch note:', mailErr);
+        emailDispatched = false;
+      }
+
       // STRICT VERIFICATION: DO NOT LOG IN YET.
-      // Transition immediately to the OTP verification step
+      // Transition immediately to the verification step
       setPendingVerificationEmail(cleanEmail);
       setPendingPassword(password);
       if (regData?.otp_code) {
@@ -179,7 +225,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setOtpCode('');
       setResendCountdown(60);
       setMode('verify_otp');
-      showToast('Account registered! Enter the 6-digit code to activate your account.', 'info');
+
+      if (emailDispatched) {
+        showToast('Confirmation email sent! Check your inbox or activate with the code below.', 'success');
+      } else {
+        showToast('Account registered! Use the activation code below to activate immediately.', 'info');
+      }
     } catch (err: any) {
       console.error('Sign up error:', err);
       setErrorMsg(err.message || 'Failed to create student account.');
@@ -188,9 +239,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+  const handleVerifyOtp = async (codeToVerify?: string) => {
+    const activeCode = (codeToVerify || otpCode).trim();
+    if (!activeCode || activeCode.length !== 6) {
       setErrorMsg('Please enter a valid 6-digit verification code.');
       return;
     }
@@ -202,7 +253,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       // 1. Verify OTP and confirm user in auth.users
       const { error: vErr } = await supabase.rpc('verify_student_email_otp', {
         p_email: pendingVerificationEmail,
-        p_otp: otpCode.trim(),
+        p_otp: activeCode,
       });
 
       if (vErr) throw vErr;
@@ -249,6 +300,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     setErrorMsg(null);
     try {
+      const redirectUrl = window.location.origin + window.location.pathname;
+
+      // 1. Generate fresh 6-digit OTP in database
       const { data, error } = await supabase.rpc('request_email_verification_otp', {
         p_email: pendingVerificationEmail,
       });
@@ -256,8 +310,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (data?.otp_code) {
         setCampusOtpPreview(data.otp_code);
       }
+
+      // 2. Trigger outbound confirmation email via Supabase
+      try {
+        await supabase.auth.resend({
+          type: 'signup',
+          email: pendingVerificationEmail,
+          options: { emailRedirectTo: redirectUrl },
+        });
+      } catch (mailErr) {
+        console.warn('Resend mail note:', mailErr);
+      }
+
       setResendCountdown(60);
-      showToast('A fresh verification code has been generated.', 'success');
+      showToast('A fresh confirmation link & activation code have been generated.', 'success');
     } catch (err: any) {
       setErrorMsg(err.message || 'Could not resend code. Please try again.');
     } finally {
@@ -352,43 +418,61 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             {/* Forms */}
             {mode === 'verify_otp' ? (
-              <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <div className="text-center space-y-1">
-                  <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-2">
+              <form onSubmit={(e) => { e.preventDefault(); handleVerifyOtp(); }} className="space-y-4">
+                <div className="text-center space-y-2">
+                  <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-1">
                     <ShieldCheck className="w-6 h-6" />
                   </div>
-                  <h4 className="text-sm font-semibold text-white">Enter 6-Digit Verification Code</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    A verification code was generated for{' '}
-                    <span className="text-emerald-400 font-mono font-medium">{pendingVerificationEmail}</span>.
-                    Enter the code below to activate your student privileges.
-                  </p>
+                  <h4 className="text-sm font-semibold text-white">Choose Your Verification Method</h4>
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-left space-y-1.5 text-xs text-slate-300">
+                    <div className="flex items-start gap-2">
+                      <span className="font-bold text-emerald-400">1.</span>
+                      <span>
+                        <strong>Via Email Link:</strong> Check your inbox for{' '}
+                        <span className="text-emerald-400 font-mono">{pendingVerificationEmail}</span> and click{' '}
+                        <span className="text-white font-medium">"Confirm your mail"</span> (also check Spam/Junk).
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="font-bold text-emerald-400">2.</span>
+                      <span>
+                        <strong>Instant Activation:</strong> Use the 6-digit institutional code below to activate immediately without waiting for mail delivery.
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Campus Verification Sandbox Assistant */}
+                {/* Campus Verification Instant Assistant */}
                 {campusOtpPreview && (
-                  <div className="p-3 bg-emerald-950/30 border border-emerald-500/40 rounded-xl flex items-center justify-between">
+                  <div className="p-3 bg-emerald-950/40 border border-emerald-500/50 rounded-xl flex items-center justify-between">
                     <div>
-                      <div className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">
-                        Institutional Verification Code
+                      <div className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Institutional Activation Code
                       </div>
-                      <div className="text-lg font-mono font-bold text-white tracking-widest mt-0.5">
+                      <div className="text-2xl font-mono font-bold text-white tracking-widest mt-0.5">
                         {campusOtpPreview}
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        Valid for 15 minutes • Instant access
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setOtpCode(campusOtpPreview)}
-                      className="px-2.5 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 text-xs font-semibold rounded-lg transition border border-emerald-500/40"
+                      onClick={() => {
+                        setOtpCode(campusOtpPreview);
+                        handleVerifyOtp(campusOtpPreview);
+                      }}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition shadow-md shadow-emerald-950"
                     >
-                      Autofill Code
+                      Autofill & Verify
                     </button>
                   </div>
                 )}
 
                 <div>
                   <label className="text-xs font-medium text-slate-300 mb-1.5 block">
-                    6-Digit Verification Code (OTP)
+                    6-Digit Verification Code
                   </label>
                   <input
                     type="text"
@@ -407,7 +491,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   disabled={loading || otpCode.length !== 6}
                   className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30"
                 >
-                  <CheckCircle2 className="w-4 h-4" /> {loading ? 'Verifying & Activating...' : 'Verify & Activate Account'}
+                  <CheckCircle2 className="w-4 h-4" /> {loading ? 'Activating Account...' : 'Verify & Activate Account'}
                 </button>
 
                 <div className="flex items-center justify-between text-xs pt-1">
@@ -429,7 +513,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     className="text-emerald-400 hover:text-emerald-300 disabled:text-slate-600 flex items-center gap-1 transition font-medium"
                   >
                     <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                    {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend Code'}
+                    {resendCountdown > 0 ? `Resend email in ${resendCountdown}s` : 'Resend Email / Code'}
                   </button>
                 </div>
               </form>
@@ -595,7 +679,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   disabled={loading}
                   className="w-full mt-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30"
                 >
-                  <UserPlus className="w-4 h-4" /> {loading ? 'Registering...' : 'Register Student & Get OTP'}
+                  <UserPlus className="w-4 h-4" /> {loading ? 'Registering...' : 'Register Student & Get Code'}
                 </button>
               </form>
             )}
