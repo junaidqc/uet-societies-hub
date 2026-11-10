@@ -10,6 +10,10 @@ import {
   Eye,
   EyeOff,
   ScanLine,
+  ShieldCheck,
+  RotateCw,
+  ArrowLeft,
+  CheckCircle2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { StudentCardScannerModal } from './StudentCardScannerModal';
@@ -30,7 +34,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   initialMode = 'signin',
 }) => {
   const { showToast } = useToast();
-  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
+  const [mode, setMode] = useState<'signin' | 'signup' | 'verify_otp'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -42,12 +46,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
 
+  // OTP Verification States
+  const [otpCode, setOtpCode] = useState('');
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
+  const [pendingPassword, setPendingPassword] = useState('');
+  const [campusOtpPreview, setCampusOtpPreview] = useState<string | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(0);
+
   useEffect(() => {
     if (isOpen) {
       setMode(initialMode);
       setErrorMsg(null);
     }
   }, [isOpen, initialMode]);
+
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCountdown]);
 
   if (!isOpen) return null;
 
@@ -56,13 +76,37 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     setErrorMsg(null);
     try {
-      const cleanEmail = email.trim();
+      const cleanEmail = email.trim().toLowerCase();
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Detect if email is not confirmed
+        if (
+          error.message?.toLowerCase().includes('email not confirmed') ||
+          error.message?.toLowerCase().includes('not verified')
+        ) {
+          // Generate a fresh OTP and transition straight to verification screen
+          const { data: otpRes } = await supabase.rpc('request_email_verification_otp', {
+            p_email: cleanEmail,
+          });
+          setPendingVerificationEmail(cleanEmail);
+          setPendingPassword(password);
+          if (otpRes?.otp_code) {
+            setCampusOtpPreview(otpRes.otp_code);
+          }
+          setMode('verify_otp');
+          setResendCountdown(60);
+          setErrorMsg(
+            'Your account is not verified yet. Enter the 6-digit verification code below to activate your account.'
+          );
+          return;
+        }
+        throw error;
+      }
+
       if (!data.user) throw new Error('Sign in failed');
 
       const { data: profileData } = await supabase
@@ -106,40 +150,116 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: cleanEmail,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            roll_number: rollNumber,
-            department,
-            semester,
-          },
-        },
+      // Register through dedicated student registration RPC to guarantee unconfirmed security
+      const { data: regData, error: regErr } = await supabase.rpc('register_student_account', {
+        p_email: cleanEmail,
+        p_password: password,
+        p_full_name: fullName.trim(),
+        p_roll_number: rollNumber.trim().toUpperCase(),
+        p_department: department,
+        p_semester: Number(semester),
       });
 
-      if (error) throw error;
-      if (!data.user) throw new Error('Signup failed');
+      if (regErr) {
+        if (regErr.message && regErr.message.includes('already exists')) {
+          setErrorMsg('An account with this email already exists. Please Sign In.');
+          setLoading(false);
+          return;
+        }
+        throw regErr;
+      }
 
-      const newProfile: Profile = {
-        id: data.user.id,
-        email: cleanEmail,
-        full_name: fullName,
-        roll_number: rollNumber,
+      // STRICT VERIFICATION: DO NOT LOG IN YET.
+      // Transition immediately to the OTP verification step
+      setPendingVerificationEmail(cleanEmail);
+      setPendingPassword(password);
+      if (regData?.otp_code) {
+        setCampusOtpPreview(regData.otp_code);
+      }
+      setOtpCode('');
+      setResendCountdown(60);
+      setMode('verify_otp');
+      showToast('Account registered! Enter the 6-digit code to activate your account.', 'info');
+    } catch (err: any) {
+      console.error('Sign up error:', err);
+      setErrorMsg(err.message || 'Failed to create student account.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+      setErrorMsg('Please enter a valid 6-digit verification code.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      // 1. Verify OTP and confirm user in auth.users
+      const { error: vErr } = await supabase.rpc('verify_student_email_otp', {
+        p_email: pendingVerificationEmail,
+        p_otp: otpCode.trim(),
+      });
+
+      if (vErr) throw vErr;
+
+      // 2. Now that user is confirmed, sign in to establish real authenticated JWT session
+      const { data: loginData, error: loginErr } = await supabase.auth.signInWithPassword({
+        email: pendingVerificationEmail,
+        password: pendingPassword,
+      });
+
+      if (loginErr) throw loginErr;
+      if (!loginData.user) throw new Error('Authentication failed after verification.');
+
+      // 3. Retrieve verified student profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', loginData.user.id)
+        .single();
+
+      const profile: Profile = profileData || {
+        id: loginData.user.id,
+        email: pendingVerificationEmail,
+        full_name: fullName || 'UET Student',
+        roll_number: rollNumber || 'N/A',
         department,
         semester,
         is_system_admin: false,
       };
 
-      await supabase.from('profiles').upsert(newProfile);
-
-      showToast(`Account created successfully! Welcome, ${fullName}`, 'success');
-      onAuthSuccess(newProfile);
+      showToast(`Account verified & activated! Welcome, ${profile.full_name}!`, 'success');
+      onAuthSuccess(profile);
       onClose();
     } catch (err: any) {
-      console.error('Sign up error:', err);
-      setErrorMsg(err.message || 'Failed to create student account.');
+      console.error('OTP verification error:', err);
+      setErrorMsg(err.message || 'Incorrect or expired verification code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCountdown > 0 || !pendingVerificationEmail) return;
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const { data, error } = await supabase.rpc('request_email_verification_otp', {
+        p_email: pendingVerificationEmail,
+      });
+      if (error) throw error;
+      if (data?.otp_code) {
+        setCampusOtpPreview(data.otp_code);
+      }
+      setResendCountdown(60);
+      showToast('A fresh verification code has been generated.', 'success');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Could not resend code. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -172,7 +292,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 UET
               </div>
               <h3 className="font-bold text-white text-base">
-                {mode === 'signin' ? 'Sign In to Student Portal' : 'Create Student Account'}
+                {mode === 'verify_otp'
+                  ? 'Verify Institutional Email'
+                  : mode === 'signin'
+                  ? 'Sign In to Student Portal'
+                  : 'Create Student Account'}
               </h3>
             </div>
             <button
@@ -192,40 +316,124 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             )}
 
-            {/* Mode Selector Tabs */}
-            <div className="grid grid-cols-2 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('signin');
-                  setErrorMsg(null);
-                }}
-                className={`py-2 rounded-lg transition ${
-                  mode === 'signin'
-                    ? 'bg-slate-800 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('signup');
-                  setErrorMsg(null);
-                }}
-                className={`py-2 rounded-lg transition ${
-                  mode === 'signup'
-                    ? 'bg-slate-800 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Student Sign Up
-              </button>
-            </div>
+            {/* Mode Selector Tabs (only shown on signin/signup, hidden during verification) */}
+            {mode !== 'verify_otp' && (
+              <div className="grid grid-cols-2 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signin');
+                    setErrorMsg(null);
+                  }}
+                  className={`py-2 rounded-lg transition ${
+                    mode === 'signin'
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signup');
+                    setErrorMsg(null);
+                  }}
+                  className={`py-2 rounded-lg transition ${
+                    mode === 'signup'
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Student Sign Up
+                </button>
+              </div>
+            )}
 
             {/* Forms */}
-            {mode === 'signin' ? (
+            {mode === 'verify_otp' ? (
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div className="text-center space-y-1">
+                  <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-sm font-semibold text-white">Enter 6-Digit Verification Code</h4>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    A verification code was generated for{' '}
+                    <span className="text-emerald-400 font-mono font-medium">{pendingVerificationEmail}</span>.
+                    Enter the code below to activate your student privileges.
+                  </p>
+                </div>
+
+                {/* Campus Verification Sandbox Assistant */}
+                {campusOtpPreview && (
+                  <div className="p-3 bg-emerald-950/30 border border-emerald-500/40 rounded-xl flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">
+                        Institutional Verification Code
+                      </div>
+                      <div className="text-lg font-mono font-bold text-white tracking-widest mt-0.5">
+                        {campusOtpPreview}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setOtpCode(campusOtpPreview)}
+                      className="px-2.5 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 text-xs font-semibold rounded-lg transition border border-emerald-500/40"
+                    >
+                      Autofill Code
+                    </button>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-xs font-medium text-slate-300 mb-1.5 block">
+                    6-Digit Verification Code (OTP)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    autoFocus
+                    placeholder="123456"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-center text-xl text-white tracking-[0.5em] font-mono placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || otpCode.length !== 6}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> {loading ? 'Verifying & Activating...' : 'Verify & Activate Account'}
+                </button>
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('signin');
+                      setErrorMsg(null);
+                    }}
+                    className="text-slate-400 hover:text-white flex items-center gap-1 transition"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back to Sign In
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={resendCountdown > 0 || loading}
+                    className="text-emerald-400 hover:text-emerald-300 disabled:text-slate-600 flex items-center gap-1 transition font-medium"
+                  >
+                    <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                    {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend Code'}
+                  </button>
+                </div>
+              </form>
+            ) : mode === 'signin' ? (
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div>
                   <label className="text-xs font-medium text-slate-300 mb-1 block">
@@ -387,7 +595,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   disabled={loading}
                   className="w-full mt-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30"
                 >
-                  <UserPlus className="w-4 h-4" /> {loading ? 'Registering...' : 'Register Student'}
+                  <UserPlus className="w-4 h-4" /> {loading ? 'Registering...' : 'Register Student & Get OTP'}
                 </button>
               </form>
             )}

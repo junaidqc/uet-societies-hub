@@ -208,9 +208,16 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
 
     setSubmittingComment(true);
     try {
+      // Ensure active session exists
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        onRequireAuth();
+        return;
+      }
+
       const newComment = {
         post_id: activeCommentsPost.id,
-        user_id: currentUser.id,
+        user_id: sessionData.session.user.id,
         content: newCommentText.trim(),
       };
 
@@ -234,9 +241,9 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
             : p
         )
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error posting comment:', err);
-      showToast('Failed to post comment.', 'error');
+      showToast(err?.message || 'Failed to post comment.', 'error');
     } finally {
       setSubmittingComment(false);
     }

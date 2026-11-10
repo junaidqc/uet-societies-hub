@@ -78,16 +78,28 @@ class SupabaseAuthRepository implements AuthRepository {
       await LocalDataStore().signOut();
       AppLogger.info('Attempting registration via Supabase for roll: $rollNumber');
 
-      await _client.auth.signUp(
-        email: email.trim().toLowerCase(),
-        password: password,
-        data: {
-          'full_name': fullName.trim(),
-          'roll_number': rollNumber.trim().toUpperCase(),
-          'department': department.trim(),
-          'semester': semester,
-        },
-      );
+      try {
+        await _client.rpc('register_student_account', params: {
+          'p_email': email.trim().toLowerCase(),
+          'p_password': password,
+          'p_full_name': fullName.trim(),
+          'p_roll_number': rollNumber.trim().toUpperCase(),
+          'p_department': department.trim(),
+          'p_semester': semester,
+        });
+      } catch (rpcErr) {
+        AppLogger.warn('RPC register fallback to auth.signUp: ');
+        await _client.auth.signUp(
+          email: email.trim().toLowerCase(),
+          password: password,
+          data: {
+            'full_name': fullName.trim(),
+            'roll_number': rollNumber.trim().toUpperCase(),
+            'department': department.trim(),
+            'semester': semester,
+          },
+        );
+      }
     } on AuthException catch (e) {
       AppLogger.error('AuthException during registration: ${e.message}');
       throw AuthFailure(e.message);
@@ -120,9 +132,23 @@ class SupabaseAuthRepository implements AuthRepository {
   }) async {
     try {
       AppLogger.info('Verifying email OTP for account verification');
+      final cleanEmail = email.trim().toLowerCase();
+      final cleanToken = token.trim();
+      try {
+        final rpcRes = await _client.rpc('verify_student_email_otp', params: {
+          'p_email': cleanEmail,
+          'p_otp': cleanToken,
+        });
+        AppLogger.info('RPC OTP verification successful: ');
+        _guestSessionActive = false;
+        return;
+      } catch (rpcErr) {
+        AppLogger.warn('RPC verify fallback to auth.verifyOTP: ');
+      }
+
       final response = await _client.auth.verifyOTP(
-        email: email.trim().toLowerCase(),
-        token: token.trim(),
+        email: cleanEmail,
+        token: cleanToken,
         type: OtpType.signup,
       );
 
@@ -179,9 +205,16 @@ class SupabaseAuthRepository implements AuthRepository {
   Future<void> resendSignUpOtp({required String email}) async {
     try {
       AppLogger.info('Resending signup OTP for email confirmation');
+      final cleanEmail = email.trim().toLowerCase();
+      try {
+        await _client.rpc('request_email_verification_otp', params: {
+          'p_email': cleanEmail,
+        });
+      } catch (_) {}
+
       await _client.auth.resend(
         type: OtpType.signup,
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
       );
     } on AuthException catch (e) {
       AppLogger.error('Resend signup OTP failed: \${e.message}');
