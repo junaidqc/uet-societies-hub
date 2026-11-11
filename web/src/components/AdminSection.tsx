@@ -10,10 +10,13 @@ import {
   Briefcase,
   RefreshCw,
   FileCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Society, Profile } from '../types';
 import { useToast } from './Toast';
+import { StatCounter } from './common/StatCounter';
+import { formatPKTDate } from '../utils/date';
 
 interface AdminSectionProps {
   currentUser: Profile | null;
@@ -21,7 +24,6 @@ interface AdminSectionProps {
 
 export const AdminSection: React.FC<AdminSectionProps> = ({ currentUser }) => {
   const { showToast } = useToast();
-  // BUG-07 Fix: Initialize with verified platform counts rather than 0
   const [stats, setStats] = useState({
     totalStudents: 1,
     activeSocieties: 5,
@@ -64,7 +66,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({ currentUser }) => {
         totalApplications: getCount(results[4], 0),
       });
 
-      // 2. Fetch pending societies
+      // Fetch pending societies
       const { data: pendingData } = await supabase
         .from('societies')
         .select('*')
@@ -78,7 +80,6 @@ export const AdminSection: React.FC<AdminSectionProps> = ({ currentUser }) => {
     }
   };
 
-  // Run on mount and when currentUser changes
   useEffect(() => {
     fetchAdminData();
   }, [currentUser]);
@@ -103,23 +104,16 @@ export const AdminSection: React.FC<AdminSectionProps> = ({ currentUser }) => {
   };
 
   const handleReject = async (societyId: string) => {
-    const reason = prompt('Please provide reason for rejecting this society charter:');
-    if (!reason) return;
-
     setActionLoading(societyId);
     try {
       const { error } = await supabase
         .from('societies')
-        .update({
-          status: 'rejected',
-          rejection_reason: reason,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ status: 'inactive', updated_at: new Date().toISOString() })
         .eq('id', societyId);
 
       if (error) throw error;
       setPendingSocieties((prev) => prev.filter((s) => s.id !== societyId));
-      showToast('Society charter proposal rejected.', 'info');
+      showToast('Society registration rejected.', 'info');
       fetchAdminData();
     } catch (err: any) {
       showToast(err.message || 'Failed to reject society.', 'error');
@@ -130,104 +124,104 @@ export const AdminSection: React.FC<AdminSectionProps> = ({ currentUser }) => {
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-emerald-950/60 via-slate-900 to-slate-950 border border-emerald-500/30 rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-            <Shield className="w-3.5 h-3.5" /> University System Admin Directorate
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-900/90 to-emerald-950/40 border border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 shadow-xl">
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+            <Shield className="w-3.5 h-3.5" /> UET Student Affairs Directorate
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-white">
-            Campus Governance & Charter Approvals
+          <h2 className="text-xl sm:text-2xl font-black text-white">
+            Administrative Council Portal
           </h2>
-          <p className="text-xs text-slate-400">
-            Review new society registration charters, manage compliance, and supervise recruitment
-            cycles.
+          <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
+            Charter approval, governance auditing, and cross-departmental society compliance monitoring.
           </p>
         </div>
 
         <button
-          onClick={() => {
-            fetchAdminData();
-            showToast('Refreshed admin metrics', 'info');
-          }}
+          onClick={fetchAdminData}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition"
+          className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs font-semibold text-slate-200 transition cursor-pointer"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${loading ? 'animate-spin' : ''}`} />
           <span>Refresh Metrics</span>
         </button>
       </div>
 
-      {/* KPI Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {[
-          { label: 'Registered Students', val: stats.totalStudents, icon: <Users className="w-4 h-4 text-emerald-400" /> },
-          { label: 'Active Societies', val: stats.activeSocieties, icon: <Building className="w-4 h-4 text-blue-400" /> },
-          { label: 'Pending Charters', val: stats.pendingSocieties, icon: <Clock className="w-4 h-4 text-amber-400" /> },
-          { label: 'Campus Events', val: stats.totalEvents, icon: <Calendar className="w-4 h-4 text-purple-400" /> },
-          { label: 'Submitted Applications', val: stats.totalApplications, icon: <Briefcase className="w-4 h-4 text-teal-400" /> },
-        ].map((item, idx) => (
-          <div
-            key={idx}
-            className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-medium text-slate-400">{item.label}</span>
-              {item.icon}
-            </div>
-            <p className="text-2xl font-extrabold text-white">{item.val}</p>
-          </div>
-        ))}
+      {/* Metrics Counters Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCounter
+          label="Registered Students"
+          target={stats.totalStudents}
+          icon={<Users className="w-4 h-4 text-emerald-400" />}
+        />
+        <StatCounter
+          label="Active Societies"
+          target={stats.activeSocieties}
+          icon={<Building className="w-4 h-4 text-emerald-400" />}
+        />
+        <StatCounter
+          label="Campus Events"
+          target={stats.totalEvents}
+          icon={<Calendar className="w-4 h-4 text-emerald-400" />}
+        />
+        <StatCounter
+          label="Submitted Applications"
+          target={stats.totalApplications}
+          icon={<Briefcase className="w-4 h-4 text-emerald-400" />}
+        />
       </div>
 
-      {/* Society Charters Approval Queue */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-4 shadow-xl">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+      {/* Pending Society Charters */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div>
             <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <FileCheck className="w-5 h-5 text-emerald-400" /> Charter Approval Queue
+              <FileCheck className="w-5 h-5 text-emerald-400" /> Pending Charter Registrations
             </h3>
             <p className="text-xs text-slate-400">
-              Proposals submitted by faculty advisors and student presidents
+              Societies awaiting accreditation review from Director Student Affairs
             </p>
           </div>
-          <span className="text-xs font-mono px-2.5 py-1 rounded-full bg-slate-950 border border-slate-800 text-slate-300">
+          <span className="px-2.5 py-1 rounded-full bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400">
             {pendingSocieties.length} Pending
           </span>
         </div>
 
         {pendingSocieties.length > 0 ? (
-          <div className="space-y-4 pt-2">
+          <div className="space-y-3">
             {pendingSocieties.map((soc) => (
               <div
                 key={soc.id}
-                className="bg-slate-950/70 border border-slate-800 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                className="p-4 rounded-2xl bg-slate-950 border border-slate-800/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
               >
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-bold text-white">{soc.name}</span>
-                    <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-amber-950/50 text-amber-300 border border-amber-500/30">
+                    <span className="font-bold text-white text-sm">{soc.name}</span>
+                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
                       {soc.category}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed mb-2">{soc.description}</p>
-                  <p className="text-[11px] text-slate-500">Contact: {soc.email || 'N/A'}</p>
+                  <p className="text-xs text-slate-400 line-clamp-2">{soc.description}</p>
+                  <p className="text-[11px] font-mono text-slate-500 mt-1">
+                    Category: {soc.category} &bull; Registered: {formatPKTDate(soc.created_at)}
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => handleReject(soc.id)}
                     disabled={actionLoading === soc.id}
-                    className="px-3.5 py-2 rounded-xl bg-red-950/40 hover:bg-red-900/60 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-1.5 transition"
+                    className="p-2 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/30 transition cursor-pointer"
+                    title="Reject Charter"
+                    aria-label="Reject Charter"
                   >
-                    <XCircle className="w-3.5 h-3.5" />
-                    <span>Reject</span>
+                    <XCircle className="w-4 h-4" />
                   </button>
-
                   <button
                     onClick={() => handleApprove(soc.id)}
                     disabled={actionLoading === soc.id}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-emerald-900/30 transition"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-950 transition cursor-pointer"
                   >
                     <CheckCircle className="w-3.5 h-3.5" />
                     <span>Approve Charter</span>
@@ -238,7 +232,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({ currentUser }) => {
           </div>
         ) : (
           <div className="py-12 text-center text-xs text-slate-500">
-            All charter submissions are reviewed. No pending approvals in queue.
+            No pending society registration requests at this time. All active councils verified.
           </div>
         )}
       </div>

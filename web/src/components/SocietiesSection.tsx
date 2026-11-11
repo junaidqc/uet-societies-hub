@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Users,
@@ -9,10 +9,17 @@ import {
   X,
   PlusCircle,
   ShieldCheck,
+  Compass,
+  FileText,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Society, Profile, Event, Hiring } from '../types';
 import { useToast } from './Toast';
+import { filterSocieties } from '../utils/search';
+import { formatPKTDate } from '../utils/date';
+import { syncAppUrl } from '../utils/urlState';
+import { Modal } from './common/Modal';
+import { ErrorState } from './common/ErrorState';
 
 interface SocietiesSectionProps {
   currentUser: Profile | null;
@@ -20,6 +27,8 @@ interface SocietiesSectionProps {
   onApplyHiring: (hiring: Hiring) => void;
   cachedSocieties?: Society[];
   onCacheSocieties?: (societies: Society[]) => void;
+  initialQuery?: string;
+  initialCategory?: string;
 }
 
 export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
@@ -28,14 +37,20 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
   onApplyHiring,
   cachedSocieties = [],
   onCacheSocieties,
+  initialQuery = '',
+  initialCategory = 'All',
 }) => {
   const { showToast } = useToast();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const [societies, setSocieties] = useState<Society[]>(cachedSocieties);
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [followedSet, setFollowedSet] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(cachedSocieties.length === 0);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [error, setError] = useState<string | null>(null);
+
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
 
   // Society Detail Modal
   const [activeSociety, setActiveSociety] = useState<Society | null>(null);
@@ -51,19 +66,34 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
   const [propEmail, setPropEmail] = useState('');
   const [submittingProp, setSubmittingProp] = useState(false);
 
+  // Focus search bar on '/' keypress
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '/' && document.activeElement !== searchInputRef.current) {
+        if (!['INPUT', 'TEXTAREA'].includes((document.activeElement as HTMLElement)?.tagName)) {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const fetchSocieties = async () => {
     if (societies.length === 0) setLoading(true);
+    setError(null);
     try {
       // 1. Fetch societies
-      const { data, error } = await supabase
+      const { data, error: socErr } = await supabase
         .from('societies')
         .select('*')
         .eq('status', 'active')
         .order('name', { ascending: true });
 
-      if (error) throw error;
+      if (socErr) throw socErr;
 
-      // 2. Pre-fetch all events so Society modal has 0ms hydration for BUG-06
+      // 2. Pre-fetch all events so Society modal has 0ms hydration
       const { data: eventsData } = await supabase
         .from('events')
         .select('*, society:societies(*)')
@@ -96,8 +126,9 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
       if (onCacheSocieties) {
         onCacheSocieties(processed);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching societies:', err);
+      setError(err?.message || 'Could not load official student societies.');
     } finally {
       setLoading(false);
     }
@@ -107,7 +138,18 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
     fetchSocieties();
   }, [currentUser]);
 
-  // Handle follow toggle
+  // Sync search state to URL
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    syncAppUrl({ tab: 'societies', query: val, category: selectedCategory }, true);
+  };
+
+  const handleCategoryChange = (cat: string) => {
+    setSelectedCategory(cat);
+    syncAppUrl({ tab: 'societies', query: searchQuery, category: cat }, true);
+  };
+
+  // Follow toggle
   const handleToggleFollow = async (society: Society, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!currentUser) {
@@ -127,7 +169,6 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
     }
     setFollowedSet(nextSet);
 
-    // Optimistic count
     setSocieties((prev) =>
       prev.map((s) =>
         s.id === society.id
@@ -157,43 +198,25 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
     }
   };
 
-  // Open Society Detail (BUG-06 fix: immediate hydration from pre-fetched events)
+  // Open Society Detail
   const handleOpenDetail = async (society: Society) => {
-    // 1. Immediately hydrate events matching this society from memory (0ms delay)
-    const instantEvents = allEvents.filter((e) => e.society_id === society.id);
-    setSocietyEvents(instantEvents);
     setActiveSociety(society);
+    syncAppUrl({ tab: 'societies', societyId: society.slug }, true);
+
+    const preFiltered = allEvents.filter((e) => e.society_id === society.id);
+    setSocietyEvents(preFiltered);
+
     setLoadingDetail(true);
-
     try {
-      // 2. Fetch fresh events and hirings in parallel
-      const [eRes, hRes] = await Promise.all([
-        supabase
-          .from('events')
-          .select('*, society:societies(*)')
-          .eq('society_id', society.id)
-          .order('start_time', { ascending: true }),
-        supabase
-          .from('hirings')
-          .select('*, society:societies(*)') // BUG-05 fix: include society
-          .eq('society_id', society.id)
-          .eq('status', 'open'),
-      ]);
+      const { data: hiringsData } = await supabase
+        .from('hirings')
+        .select('*')
+        .eq('society_id', society.id)
+        .eq('status', 'open');
 
-      if (eRes.data) {
-        setSocietyEvents(eRes.data);
-      }
-
-      if (hRes.data) {
-        // Ensure society object is always attached to each hiring
-        const hiringsWithSociety = hRes.data.map((h) => ({
-          ...h,
-          society: h.society || society,
-        }));
-        setSocietyHirings(hiringsWithSociety);
-      }
+      setSocietyHirings(hiringsData || []);
     } catch (err) {
-      console.error('Error fetching society details:', err);
+      console.error('Error fetching society detail:', err);
     } finally {
       setLoadingDetail(false);
     }
@@ -210,9 +233,9 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
     setSubmittingProp(true);
     try {
       const slug = propName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const { error } = await supabase.from('societies').insert({
+      const { error: insErr } = await supabase.from('societies').insert({
         name: propName.trim(),
-        slug,
+        slug: slug || `soc-${Date.now()}`,
         category: propCategory,
         description: propDesc.trim(),
         email: propEmail.trim() || null,
@@ -221,7 +244,7 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
         social_links: {},
       });
 
-      if (error) throw error;
+      if (insErr) throw insErr;
       showToast('Society charter submitted to Admin Directorate for approval!', 'success');
       setProposeModalOpen(false);
       setPropName('');
@@ -236,43 +259,49 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
   };
 
   const categories = ['All', 'Technical', 'Literary', 'Social'];
-
-  const filtered = societies.filter((s) => {
-    const matchesCat =
-      selectedCategory === 'All' ||
-      s.category.toLowerCase().includes(selectedCategory.toLowerCase());
-    const matchesSearch =
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCat && matchesSearch;
-  });
+  const filtered = filterSocieties(societies, searchQuery, selectedCategory);
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6">
       {/* Search and Action Bar */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        {/* Search Input */}
+        {/* Search Input with Clear Button and Shortcut */}
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+          <label htmlFor="society-search" className="sr-only">
+            Search societies
+          </label>
+          <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" aria-hidden="true" />
           <input
+            id="society-search"
+            ref={searchInputRef}
             type="text"
-            placeholder="Search societies, technical branches, clubs..."
+            placeholder="Search societies, technical branches, clubs... (Press / to focus)"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl pl-10 pr-9 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition shadow-inner"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => handleSearchChange('')}
+              aria-label="Clear search input"
+              className="absolute right-3 top-2.5 p-0.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Category Filter Pills & Charter Button */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1" role="toolbar" aria-label="Society Filters">
           {categories.map((cat) => (
             <button
               key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition ${
+              onClick={() => handleCategoryChange(cat)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                 selectedCategory === cat
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
-                  : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
               }`}
             >
               {cat}
@@ -284,7 +313,7 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
               if (!currentUser) onRequireAuth();
               else setProposeModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-emerald-400 whitespace-nowrap transition ml-auto"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/30 text-xs font-semibold text-emerald-400 whitespace-nowrap transition ml-auto cursor-pointer"
           >
             <PlusCircle className="w-3.5 h-3.5" />
             <span>Charter Society</span>
@@ -292,26 +321,29 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
         </div>
       </div>
 
-      {/* Grid of Society Cards (BUG-08: rich skeleton wireframes instead of blank dark boxes) */}
-      {loading ? (
+      {/* Error state */}
+      {error && <ErrorState message={error} onRetry={fetchSocieties} retrying={loading} />}
+
+      {/* Grid of Society Cards */}
+      {loading && !error ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
-              className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 h-64 space-y-4 animate-pulse"
+              className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 h-64 space-y-4 animate-pulse"
             >
               <div className="flex justify-between items-start">
-                <div className="w-12 h-12 rounded-2xl bg-slate-800" />
-                <div className="w-16 h-5 rounded-full bg-slate-800" />
+                <div className="w-12 h-12 rounded-2xl bg-zinc-800" />
+                <div className="w-16 h-5 rounded-full bg-zinc-800" />
               </div>
-              <div className="h-5 w-40 bg-slate-800 rounded" />
+              <div className="h-5 w-40 bg-zinc-800 rounded" />
               <div className="space-y-2">
-                <div className="h-3 w-full bg-slate-800/60 rounded" />
-                <div className="h-3 w-4/5 bg-slate-800/60 rounded" />
+                <div className="h-3 w-full bg-zinc-800/60 rounded" />
+                <div className="h-3 w-4/5 bg-zinc-800/60 rounded" />
               </div>
-              <div className="pt-4 border-t border-slate-800/80 flex justify-between">
-                <div className="h-4 w-20 bg-slate-800 rounded" />
-                <div className="h-6 w-16 bg-slate-800 rounded" />
+              <div className="pt-4 border-t border-zinc-800/80 flex justify-between">
+                <div className="h-4 w-20 bg-zinc-800 rounded" />
+                <div className="h-6 w-16 bg-zinc-800 rounded" />
               </div>
             </div>
           ))}
@@ -324,15 +356,15 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
               <div
                 key={soc.id}
                 onClick={() => handleOpenDetail(soc)}
-                className="bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 rounded-3xl p-6 flex flex-col justify-between shadow-xl transition duration-200 cursor-pointer group"
+                className="tech-card bg-zinc-900/80 hover:bg-zinc-900 border border-zinc-800/80 hover:border-emerald-500/40 rounded-3xl p-6 flex flex-col justify-between shadow-xl cursor-pointer group"
               >
                 <div>
                   {/* Top Header */}
                   <div className="flex items-start justify-between gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 flex items-center justify-center font-bold text-emerald-400 text-lg">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 flex items-center justify-center font-bold text-emerald-400 text-lg group-hover:scale-105 transition">
                       {soc.name.charAt(0)}
                     </div>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-950 border border-slate-800 text-slate-300">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-zinc-950 border border-zinc-800 text-zinc-300">
                       {soc.category}
                     </span>
                   </div>
@@ -341,14 +373,14 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
                   <h3 className="text-base font-bold text-white group-hover:text-emerald-300 transition line-clamp-1">
                     {soc.name}
                   </h3>
-                  <p className="text-xs text-slate-400 mt-2 line-clamp-3 leading-relaxed">
+                  <p className="text-xs text-zinc-400 mt-2 line-clamp-3 leading-relaxed">
                     {soc.description}
                   </p>
                 </div>
 
                 {/* Footer with Follow Button */}
-                <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <div className="mt-5 pt-4 border-t border-zinc-800/80 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs text-zinc-400">
                     <Users className="w-3.5 h-3.5 text-emerald-400" />
                     <span>{soc.follower_count || 0} Followers</span>
                   </div>
@@ -356,10 +388,10 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
                   <button
                     type="button"
                     onClick={(e) => handleToggleFollow(soc, e)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                       isFollowing
                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                        : 'bg-slate-800 hover:bg-slate-700 text-white'
+                        : 'bg-zinc-800 hover:bg-zinc-700 text-white'
                     }`}
                   >
                     {isFollowing ? 'Following' : '+ Follow'}
@@ -370,226 +402,221 @@ export const SocietiesSection: React.FC<SocietiesSectionProps> = ({
           })}
         </div>
       ) : (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center">
-          <p className="text-slate-400 text-sm">No societies found matching your criteria.</p>
+        <div className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-12 text-center max-w-lg mx-auto">
+          <div className="w-12 h-12 rounded-2xl bg-zinc-800/80 text-zinc-500 flex items-center justify-center mx-auto mb-3">
+            <Compass className="w-6 h-6" />
+          </div>
+          <h4 className="text-base font-bold text-white mb-1">No Societies Found</h4>
+          <p className="text-zinc-400 text-xs mb-5">
+            We couldn't find any student societies matching <span className="text-emerald-400 font-mono">"{searchQuery}"</span> in the {selectedCategory} category.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              handleSearchChange('');
+              handleCategoryChange('All');
+            }}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition cursor-pointer"
+          >
+            Reset All Filters
+          </button>
         </div>
       )}
 
-      {/* Society Detail Modal */}
+      {/* Accessible Society Detail Modal */}
       {activeSociety && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
-            {/* Modal Header */}
-            <div className="relative p-6 border-b border-slate-800 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
-              <button
-                onClick={() => setActiveSociety(null)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <Modal
+          isOpen={!!activeSociety}
+          onClose={() => {
+            setActiveSociety(null);
+            syncAppUrl({ tab: 'societies', societyId: null }, true);
+          }}
+          title={activeSociety.name}
+          subtitle={`${activeSociety.category} • Official UET Directorate Chartered`}
+          icon={<ShieldCheck className="w-5 h-5 text-emerald-400" />}
+          maxWidth="2xl"
+        >
+          <div className="space-y-6">
+            {/* About */}
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                About Society
+              </h4>
+              <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+                {activeSociety.description}
+              </p>
+            </div>
 
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 flex items-center justify-center font-bold text-emerald-400 text-2xl shadow-lg">
-                  {activeSociety.name.charAt(0)}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-bold text-white">{activeSociety.name}</h2>
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {activeSociety.category} &bull; Official UET Directorate Chartered
-                  </p>
-                </div>
+            {/* Contact info */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-zinc-950 rounded-2xl border border-zinc-800 text-xs">
+              <div className="flex items-center gap-2 text-zinc-300">
+                <Mail className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="truncate">{activeSociety.email || 'info@uet.edu.pk'}</span>
+              </div>
+              <div className="flex items-center gap-2 text-zinc-300">
+                <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="truncate">{activeSociety.website || 'uet.edu.pk/societies'}</span>
               </div>
             </div>
 
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* About */}
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                  About Society
-                </h4>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                  {activeSociety.description}
-                </p>
-              </div>
-
-              {/* Contact info */}
-              <div className="grid grid-cols-2 gap-3 p-3.5 bg-slate-950 rounded-2xl border border-slate-800 text-xs">
-                <div className="flex items-center gap-2 text-slate-300">
-                  <Mail className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="truncate">{activeSociety.email || 'info@uet.edu.pk'}</span>
-                </div>
-                <div className="flex items-center gap-2 text-slate-300">
-                  <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="truncate">{activeSociety.website || 'uet.edu.pk/societies'}</span>
-                </div>
-              </div>
-
-              {/* Open Hirings Section */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <Briefcase className="w-3.5 h-3.5 text-emerald-400" /> Open Recruitments (
-                    {societyHirings.length})
-                  </h4>
-                </div>
-                {societyHirings.length > 0 ? (
-                  <div className="space-y-2.5">
-                    {societyHirings.map((h) => (
-                      <div
-                        key={h.id}
-                        className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between"
-                      >
-                        <div>
-                          <p className="text-xs font-bold text-white">{h.title}</p>
-                          <p className="text-[11px] text-slate-400">
-                            Deadline: {new Date(h.deadline).toLocaleDateString()} &bull;{' '}
-                            {h.total_seats || 10} Seats
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setActiveSociety(null);
-                            onApplyHiring({
-                              ...h,
-                              society: activeSociety, // BUG-05 fix: always provide active society
-                            });
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
-                        >
-                          Apply Now
-                        </button>
+            {/* Open Hirings Section */}
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3 flex items-center gap-1.5">
+                <Briefcase className="w-3.5 h-3.5 text-emerald-400" /> Open Recruitments ({societyHirings.length})
+              </h4>
+              {societyHirings.length > 0 ? (
+                <div className="space-y-2.5">
+                  {societyHirings.map((h) => (
+                    <div
+                      key={h.id}
+                      className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-between"
+                    >
+                      <div>
+                        <p className="text-xs font-bold text-white">{h.title}</p>
+                        <p className="text-[11px] text-zinc-400">
+                          Deadline: {formatPKTDate(h.deadline)} &bull; {h.total_seats || 10} Seats
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500 italic">No active recruitment cycles.</p>
-                )}
-              </div>
-
-              {/* BUG-06 Fix: Accurate Upcoming Events count and list */}
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-emerald-400" /> Upcoming Events (
-                  {loadingDetail && societyEvents.length === 0 ? '...' : societyEvents.length})
-                </h4>
-                {societyEvents.length > 0 ? (
-                  <div className="space-y-2">
-                    {societyEvents.map((e) => (
-                      <div
-                        key={e.id}
-                        className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
+                      <button
+                        onClick={() => {
+                          setActiveSociety(null);
+                          onApplyHiring({
+                            ...h,
+                            society: activeSociety,
+                          });
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
                       >
-                        <div>
-                          <p className="font-semibold text-white">{e.title}</p>
-                          <p className="text-[11px] text-slate-400">{e.venue}</p>
-                        </div>
-                        <span className="text-[11px] font-mono text-emerald-400">
-                          {new Date(e.start_time).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </span>
+                        Apply Now
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-500 italic">No active recruitment cycles at this time.</p>
+              )}
+            </div>
+
+            {/* Upcoming Events */}
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-emerald-400" /> Upcoming Events ({loadingDetail && societyEvents.length === 0 ? '...' : societyEvents.length})
+              </h4>
+              {societyEvents.length > 0 ? (
+                <div className="space-y-2">
+                  {societyEvents.map((e) => (
+                    <div
+                      key={e.id}
+                      className="p-3 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <p className="font-semibold text-white">{e.title}</p>
+                        <p className="text-[11px] text-zinc-400">{e.venue}</p>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500 italic">No upcoming events scheduled.</p>
-                )}
-              </div>
+                      <span className="text-[11px] font-mono text-emerald-400">
+                        {formatPKTDate(e.start_time, { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-500 italic">No upcoming events scheduled currently.</p>
+              )}
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Propose Society Modal */}
+      {/* Accessible Propose Society Charter Modal */}
       {proposeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md shadow-2xl p-6">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
-              <h3 className="font-bold text-white text-base">Charter a Society</h3>
-              <button
-                onClick={() => setProposeModalOpen(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <Modal
+          isOpen={proposeModalOpen}
+          onClose={() => setProposeModalOpen(false)}
+          title="Charter a Student Society"
+          subtitle="Submit formal charter proposal to UET Directorate of Student Affairs"
+          icon={<FileText className="w-5 h-5 text-emerald-400" />}
+          maxWidth="md"
+        >
+          <form onSubmit={handleProposeSociety} className="space-y-4 text-xs">
+            <div>
+              <label htmlFor="prop-name" className="text-zinc-300 font-medium block mb-1">
+                Society Name
+              </label>
+              <input
+                id="prop-name"
+                type="text"
+                required
+                placeholder="e.g. UET Artificial Intelligence Society"
+                value={propName}
+                onChange={(e) => setPropName(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+              />
             </div>
 
-            <form onSubmit={handleProposeSociety} className="space-y-4 text-xs">
-              <div>
-                <label className="text-slate-300 font-medium block mb-1">Society Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. UET Artificial Intelligence Society"
-                  value={propName}
-                  onChange={(e) => setPropName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
+            <div>
+              <label htmlFor="prop-category" className="text-zinc-300 font-medium block mb-1">
+                Category
+              </label>
+              <select
+                id="prop-category"
+                value={propCategory}
+                onChange={(e) => setPropCategory(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="Technical">Technical</option>
+                <option value="Literary">Literary</option>
+                <option value="Social">Social</option>
+                <option value="Sports">Sports</option>
+              </select>
+            </div>
 
-              <div>
-                <label className="text-slate-300 font-medium block mb-1">Category</label>
-                <select
-                  value={propCategory}
-                  onChange={(e) => setPropCategory(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="Technical">Technical</option>
-                  <option value="Literary">Literary</option>
-                  <option value="Social">Social</option>
-                  <option value="Sports">Sports</option>
-                </select>
-              </div>
+            <div>
+              <label htmlFor="prop-email" className="text-zinc-300 font-medium block mb-1">
+                Official Society Email
+              </label>
+              <input
+                id="prop-email"
+                type="email"
+                placeholder="society@uet.edu.pk"
+                value={propEmail}
+                onChange={(e) => setPropEmail(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono"
+              />
+            </div>
 
-              <div>
-                <label className="text-slate-300 font-medium block mb-1">Official Society Email</label>
-                <input
-                  type="email"
-                  placeholder="ai.society@uet.edu.pk"
-                  value={propEmail}
-                  onChange={(e) => setPropEmail(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
+            <div>
+              <label htmlFor="prop-desc" className="text-zinc-300 font-medium block mb-1">
+                Charter Objective & Mission
+              </label>
+              <textarea
+                id="prop-desc"
+                required
+                rows={3}
+                placeholder="Explain purpose, faculty advisor, target student community..."
+                value={propDesc}
+                onChange={(e) => setPropDesc(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 resize-none"
+              />
+            </div>
 
-              <div>
-                <label className="text-slate-300 font-medium block mb-1">
-                  Charter Objective & Vision
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="Explain purpose, faculty advisor, target student community..."
-                  value={propDesc}
-                  onChange={(e) => setPropDesc(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setProposeModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingProp}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl"
-                >
-                  {submittingProp ? 'Submitting...' : 'Submit Charter'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setProposeModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submittingProp}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl transition cursor-pointer disabled:opacity-50"
+              >
+                {submittingProp ? 'Submitting...' : 'Submit Charter'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

@@ -36,6 +36,10 @@ jobs:
         working-directory: web
         run: npm ci
 
+      - name: Run Test Suite
+        working-directory: web
+        run: npm test
+
       - name: Build Web Application
         working-directory: web
         run: npm run build

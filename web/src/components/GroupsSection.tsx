@@ -6,10 +6,13 @@ import {
   Lock,
   Clock,
   CheckCheck,
+  MessageSquare,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Group, GroupMessage, Profile } from '../types';
 import { useToast } from './Toast';
+import { formatPKTTime, getRelativeTime } from '../utils/date';
+import { ErrorState } from './common/ErrorState';
 
 interface GroupsSectionProps {
   currentUser: Profile | null;
@@ -32,8 +35,10 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchGroups = async () => {
+    setFetchError(null);
     try {
       const { data, error } = await supabase
         .from('groups')
@@ -54,8 +59,9 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
       if (processed.length > 0 && !selectedGroup) {
         setSelectedGroup(processed[0]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching groups:', err);
+      setFetchError(err.message || 'Failed to load working groups.');
     }
   };
 
@@ -107,7 +113,7 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
     }
   }, [selectedGroup]);
 
-  // BUG-04 Fix: Unresponsive send button now accepts click, form submit, and keypress
+  // BUG-04: Unresponsive send button now accepts click, form submit, and keypress
   const handleSendMessage = async (e?: React.SyntheticEvent) => {
     if (e) e.preventDefault();
     if (!newMessage.trim() || !selectedGroup) return;
@@ -173,6 +179,14 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
         </div>
       </div>
 
+      {fetchError && groups.length === 0 && (
+        <ErrorState
+          title="Failed to Load Working Groups"
+          message={fetchError}
+          onRetry={fetchGroups}
+        />
+      )}
+
       {/* Main Container */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl grid grid-cols-1 md:grid-cols-3 min-h-[600px]">
         {/* Groups Sidebar */}
@@ -191,7 +205,7 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
                 <button
                   key={grp.id}
                   onClick={() => setSelectedGroup(grp)}
-                  className={`w-full text-left p-3 rounded-2xl transition flex items-start gap-3 ${
+                  className={`w-full text-left p-3 rounded-2xl transition flex items-start gap-3 cursor-pointer ${
                     isSelected
                       ? 'bg-emerald-500/10 border border-emerald-500/30'
                       : 'hover:bg-slate-800/60 border border-transparent'
@@ -200,13 +214,13 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
                   <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-emerald-400 shrink-0">
                     {grp.name.charAt(0)}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold text-white truncate">{grp.name}</p>
-                      {grp.is_private && <Lock className="w-3 h-3 text-slate-500 shrink-0 ml-1" />}
+                      <h4 className="text-xs font-bold text-white truncate">{grp.name}</h4>
+                      <Lock className="w-3 h-3 text-slate-500 shrink-0" />
                     </div>
-                    <p className="text-[11px] text-slate-400 truncate">
-                      {grp.society?.name || 'Society Council'}
+                    <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                      {grp.society?.name || 'UET Directorate'}
                     </p>
                   </div>
                 </button>
@@ -215,112 +229,104 @@ export const GroupsSection: React.FC<GroupsSectionProps> = ({
           </div>
         </div>
 
-        {/* Chat Thread Panel */}
-        <div className="md:col-span-2 flex flex-col justify-between bg-slate-900/60">
-          {/* Thread Header */}
-          <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
-            <div>
-              <h3 className="font-bold text-white text-sm">
-                {selectedGroup ? selectedGroup.name : 'Select a Working Group'}
-              </h3>
-              <p className="text-xs text-slate-400">
-                {selectedGroup?.description || 'Committee coordination and task board'}
-              </p>
+        {/* Chat / Room Content */}
+        <div className="md:col-span-2 flex flex-col justify-between h-[600px] bg-slate-900/60">
+          {/* Room Header */}
+          <div className="p-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center font-bold text-emerald-400">
+                {selectedGroup ? selectedGroup.name.charAt(0) : '#'}
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">
+                  {selectedGroup ? selectedGroup.name : 'Select a Working Group'}
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  {selectedGroup?.society?.name || 'Authorized Council Members Only'}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 rounded-full">
-              <Clock className="w-3 h-3" /> 30d auto-purge
+
+            <div className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 rounded-full flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Encrypted Room</span>
             </div>
           </div>
 
-          {/* Messages Area */}
-          <div className="flex-1 p-6 overflow-y-auto space-y-4 max-h-[460px]">
-            {messages.length > 0 ? (
-              messages.map((m) => {
-                const isMe = currentUser && m.sender_id === currentUser.id;
-                const timeStr = new Date(m.created_at).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
+          {/* Messages Stream */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.map((msg) => {
+              const isMe = currentUser && msg.sender_id === currentUser.id;
+              const isSys = msg.sender_id === 'system';
+              const timeDisplay = formatPKTTime(msg.created_at);
 
+              if (isSys) {
                 return (
                   <div
-                    key={m.id}
-                    className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                    key={msg.id}
+                    className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800/80 text-center max-w-md mx-auto space-y-1"
                   >
-                    <div className="flex items-center gap-1.5 mb-1 px-1">
-                      <span className="text-[11px] font-semibold text-slate-400">
-                        {isMe ? 'You' : m.sender?.full_name || 'Member'}
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-600">
-                        {m.sender?.roll_number}
-                      </span>
-                    </div>
-
-                    <div
-                      className={`max-w-md p-3.5 rounded-2xl text-xs leading-relaxed ${
-                        isMe
-                          ? 'bg-emerald-600 text-white rounded-tr-none shadow-md shadow-emerald-950/50'
-                          : 'bg-slate-950 border border-slate-800 text-slate-200 rounded-tl-none'
-                      }`}
-                    >
-                      <p>{m.content}</p>
-                      <div
-                        className={`mt-1.5 flex items-center justify-end gap-1 text-[9px] ${
-                          isMe ? 'text-emerald-200' : 'text-slate-500'
-                        }`}
-                      >
-                        <span>{timeStr}</span>
-                        {isMe && <CheckCheck className="w-3 h-3 text-emerald-300" />}
-                      </div>
-                    </div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-semibold">
+                      System Notice
+                    </span>
+                    <p className="text-xs text-slate-300">{msg.content}</p>
                   </div>
                 );
-              })
-            ) : (
-              <div className="text-center py-16 text-xs text-slate-500">
-                No active discussions in this channel yet. Send an operational message below.
-              </div>
-            )}
+              }
+
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1 px-1 text-[10px] text-slate-400">
+                    <span className="font-semibold text-slate-300">
+                      {msg.sender?.full_name || 'Student'}
+                    </span>
+                    <span>&bull;</span>
+                    <span className="font-mono text-slate-500">{timeDisplay}</span>
+                  </div>
+
+                  <div
+                    className={`max-w-md rounded-2xl p-3 text-xs leading-relaxed shadow ${
+                      isMe
+                        ? 'bg-emerald-600 text-white rounded-br-none'
+                        : 'bg-slate-800 text-slate-100 rounded-bl-none border border-slate-700/60'
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Message Input (BUG-04 Fix) */}
-          <div className="p-4 border-t border-slate-800 bg-slate-950/60">
-            {currentUser ? (
-              <form onSubmit={handleSendMessage} className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Post an update to this committee channel... (Press Enter or click Send)"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage(e);
-                    }
-                  }}
-                  className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  onClick={(e) => handleSendMessage(e)}
-                  disabled={sending || !newMessage.trim()}
-                  className="p-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl transition cursor-pointer"
-                  title="Send message"
-                >
-                  <Send className="w-4 h-4 pointer-events-none" />
-                </button>
-              </form>
-            ) : (
-              <div className="text-center py-2">
-                <button
-                  onClick={onRequireAuth}
-                  className="text-xs font-semibold text-emerald-400 hover:underline"
-                >
-                  Sign in with Student ID to participate in working groups &rarr;
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Chat Input Box */}
+          <form
+            onSubmit={handleSendMessage}
+            className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center gap-2"
+          >
+            <input
+              type="text"
+              placeholder={
+                currentUser
+                  ? `Message #${selectedGroup?.name || 'group'}...`
+                  : 'Sign in to participate in working groups'
+              }
+              disabled={!currentUser || sending || !selectedGroup}
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            />
+            <button
+              type="submit"
+              disabled={!currentUser || sending || !newMessage.trim() || !selectedGroup}
+              className="p-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl shadow-md transition cursor-pointer"
+              aria-label="Send message to working group"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </form>
         </div>
       </div>
     </div>

@@ -1,28 +1,56 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { supabase } from './lib/supabase';
 import { Profile, Hiring, Event, Post, Society, Group } from './types';
 import { Navbar, NavTab } from './components/Navbar';
-import { FeedSection } from './components/FeedSection';
-import { SocietiesSection } from './components/SocietiesSection';
-import { HiringSection } from './components/HiringSection';
-import { CalendarSection } from './components/CalendarSection';
-import { GroupsSection } from './components/GroupsSection';
-import { AdminSection } from './components/AdminSection';
 import { AuthModal } from './components/AuthModal';
 import { ProfileModal } from './components/ProfileModal';
-import { DownloadApkModal, APK_RELEASE_URL } from './components/DownloadApkModal';
+import { DownloadApkModal } from './components/DownloadApkModal';
 import { EventRegistrationModal } from './components/EventRegistrationModal';
 import { ToastProvider, useToast } from './components/Toast';
+import { getAppUrlState, syncAppUrl } from './utils/urlState';
 import {
   Download,
   GraduationCap,
   Globe,
+  Loader2,
 } from 'lucide-react';
+
+// DEF-15: Code-splitting sections for high performance and fast initial paint
+const FeedSection = lazy(() =>
+  import('./components/FeedSection').then((m) => ({ default: m.FeedSection }))
+);
+const SocietiesSection = lazy(() =>
+  import('./components/SocietiesSection').then((m) => ({ default: m.SocietiesSection }))
+);
+const HiringSection = lazy(() =>
+  import('./components/HiringSection').then((m) => ({ default: m.HiringSection }))
+);
+const CalendarSection = lazy(() =>
+  import('./components/CalendarSection').then((m) => ({ default: m.CalendarSection }))
+);
+const GroupsSection = lazy(() =>
+  import('./components/GroupsSection').then((m) => ({ default: m.GroupsSection }))
+);
+const AdminSection = lazy(() =>
+  import('./components/AdminSection').then((m) => ({ default: m.AdminSection }))
+);
+
+function SectionFallback() {
+  return (
+    <div className="py-24 flex flex-col items-center justify-center gap-3 text-slate-500 animate-fadeIn">
+      <Loader2 className="w-7 h-7 text-emerald-400 animate-spin" />
+      <span className="text-xs font-mono">Loading campus module...</span>
+    </div>
+  );
+}
 
 function AppContent() {
   const { showToast } = useToast();
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
-  const [activeTab, setActiveTab] = useState<NavTab>('feed');
+
+  // DEF-01: Initialize activeTab from URL search params
+  const [activeTab, setActiveTab] = useState<NavTab>(() => getAppUrlState().tab);
+
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -30,7 +58,7 @@ function AppContent() {
   const [selectedHiringForApply, setSelectedHiringForApply] = useState<Hiring | null>(null);
   const [selectedEventForRegister, setSelectedEventForRegister] = useState<Event | null>(null);
 
-  // BUG-08 Fix: In-memory cache for seamless, instant tab switching without blank card repaints
+  // In-memory cache for seamless, instant tab switching without blank card repaints
   const [cachedPosts, setCachedPosts] = useState<Post[]>([]);
   const [cachedEvents, setCachedEvents] = useState<Event[]>([]);
   const [cachedSocieties, setCachedSocieties] = useState<Society[]>([]);
@@ -93,7 +121,23 @@ function AppContent() {
     };
   }, []);
 
-  // Automatically close auth modal if user becomes authenticated (e.g. via email link or OTP)
+  // DEF-01: Synchronize browser URL query parameters and listen for popstate (Back/Forward)
+  const handleTabChange = (tab: NavTab) => {
+    setActiveTab(tab);
+    syncAppUrl({ tab });
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const state = getAppUrlState();
+      setActiveTab(state.tab);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Close auth modal when user signs in
   useEffect(() => {
     if (currentUser) {
       setAuthModalOpen(false);
@@ -113,7 +157,7 @@ function AppContent() {
 
   const handleApplyHiring = (hiring: Hiring) => {
     setSelectedHiringForApply(hiring);
-    setActiveTab('hirings');
+    handleTabChange('hirings');
   };
 
   return (
@@ -121,7 +165,7 @@ function AppContent() {
       {/* Main Navigation */}
       <Navbar
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         currentUser={currentUser}
         onOpenAuth={handleOpenAuth}
         onOpenProfile={() => setProfileModalOpen(true)}
@@ -131,66 +175,68 @@ function AppContent() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'feed' && (
-          <FeedSection
-            currentUser={currentUser}
-            onRequireAuth={() => handleOpenAuth('signin')}
-            onNavigateToCalendar={() => setActiveTab('calendar')}
-            onNavigateToSocieties={() => setActiveTab('societies')}
-            onRegisterEvent={(evt) => setSelectedEventForRegister(evt)}
-            cachedPosts={cachedPosts}
-            cachedEvents={cachedEvents}
-            onCacheData={(posts, events) => {
-              setCachedPosts(posts);
-              setCachedEvents(events);
-            }}
-          />
-        )}
+        <Suspense fallback={<SectionFallback />}>
+          {activeTab === 'feed' && (
+            <FeedSection
+              currentUser={currentUser}
+              onRequireAuth={() => handleOpenAuth('signin')}
+              onNavigateToCalendar={() => handleTabChange('calendar')}
+              onNavigateToSocieties={() => handleTabChange('societies')}
+              onRegisterEvent={(evt) => setSelectedEventForRegister(evt)}
+              cachedPosts={cachedPosts}
+              cachedEvents={cachedEvents}
+              onCacheData={(posts, events) => {
+                setCachedPosts(posts);
+                setCachedEvents(events);
+              }}
+            />
+          )}
 
-        {activeTab === 'societies' && (
-          <SocietiesSection
-            currentUser={currentUser}
-            onRequireAuth={() => handleOpenAuth('signin')}
-            onApplyHiring={handleApplyHiring}
-            cachedSocieties={cachedSocieties}
-            onCacheSocieties={(socs) => setCachedSocieties(socs)}
-          />
-        )}
+          {activeTab === 'societies' && (
+            <SocietiesSection
+              currentUser={currentUser}
+              onRequireAuth={() => handleOpenAuth('signin')}
+              onApplyHiring={handleApplyHiring}
+              cachedSocieties={cachedSocieties}
+              onCacheSocieties={(socs) => setCachedSocieties(socs)}
+            />
+          )}
 
-        {activeTab === 'hirings' && (
-          <HiringSection
-            currentUser={currentUser}
-            onRequireAuth={() => handleOpenAuth('signin')}
-            selectedHiringForApply={selectedHiringForApply}
-            onClearSelectedHiring={() => setSelectedHiringForApply(null)}
-            cachedHirings={cachedHirings}
-            onCacheHirings={(hires) => setCachedHirings(hires)}
-          />
-        )}
+          {activeTab === 'hirings' && (
+            <HiringSection
+              currentUser={currentUser}
+              onRequireAuth={() => handleOpenAuth('signin')}
+              selectedHiringForApply={selectedHiringForApply}
+              onClearSelectedHiring={() => setSelectedHiringForApply(null)}
+              cachedHirings={cachedHirings}
+              onCacheHirings={(hires) => setCachedHirings(hires)}
+            />
+          )}
 
-        {activeTab === 'calendar' && (
-          <CalendarSection
-            currentUser={currentUser}
-            onRequireAuth={() => handleOpenAuth('signin')}
-            onRegisterEvent={(evt) => setSelectedEventForRegister(evt)}
-            cachedEvents={cachedEvents}
-            onCacheEvents={(events) => setCachedEvents(events)}
-          />
-        )}
+          {activeTab === 'calendar' && (
+            <CalendarSection
+              currentUser={currentUser}
+              onRequireAuth={() => handleOpenAuth('signin')}
+              onRegisterEvent={(evt) => setSelectedEventForRegister(evt)}
+              cachedEvents={cachedEvents}
+              onCacheEvents={(events) => setCachedEvents(events)}
+            />
+          )}
 
-        {activeTab === 'groups' && (
-          <GroupsSection
-            currentUser={currentUser}
-            onRequireAuth={() => handleOpenAuth('signin')}
-            cachedGroups={cachedGroups}
-            onCacheGroups={(grps) => setCachedGroups(grps)}
-          />
-        )}
+          {activeTab === 'groups' && (
+            <GroupsSection
+              currentUser={currentUser}
+              onRequireAuth={() => handleOpenAuth('signin')}
+              cachedGroups={cachedGroups}
+              onCacheGroups={(grps) => setCachedGroups(grps)}
+            />
+          )}
 
-        {activeTab === 'admin' && <AdminSection currentUser={currentUser} />}
+          {activeTab === 'admin' && <AdminSection currentUser={currentUser} />}
+        </Suspense>
       </main>
 
-      {/* Footer (BUG-01 Fix: triggers download modal and valid release download) */}
+      {/* Footer (triggers download modal and valid release download) */}
       <footer className="border-t border-slate-900 bg-slate-950/80 py-8 mt-12 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -212,7 +258,7 @@ function AppContent() {
               href="https://github.com/junaidqc/uet-societies-hub"
               target="_blank"
               rel="noreferrer"
-              className="hover:text-emerald-400 flex items-center gap-1 transition"
+              className="hover:text-emerald-400 flex items-center gap-1 transition cursor-pointer"
             >
               <Globe className="w-3.5 h-3.5" />
               <span>GitHub Repository</span>
@@ -236,7 +282,7 @@ function AppContent() {
         onProfileUpdated={(updated) => setCurrentUser(updated)}
       />
 
-      {/* BUG-01 Fix: Android APK Modal */}
+      {/* Android APK Download Modal */}
       <DownloadApkModal
         isOpen={downloadApkOpen}
         onClose={() => setDownloadApkOpen(false)}
@@ -246,7 +292,7 @@ function AppContent() {
         }}
       />
 
-      {/* BUG-03 Fix: Event Registration Modal */}
+      {/* Event Registration Modal */}
       <EventRegistrationModal
         isOpen={!!selectedEventForRegister}
         onClose={() => setSelectedEventForRegister(null)}

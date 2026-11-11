@@ -10,11 +10,23 @@ import {
   ChevronRight,
   PlusCircle,
   Send,
+  Search,
   X,
+  Ticket,
+  Sparkles,
+  Users,
+  Award,
+  Flame,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Post, Event, Profile, PostComment } from '../types';
 import { useToast } from './Toast';
+import { formatPKTDate, getRelativeTime } from '../utils/date';
+import { normalizeSearchQuery } from '../utils/search';
+import { ErrorState } from './common/ErrorState';
+import { Modal } from './common/Modal';
+import { MarqueeTicker } from './common/MarqueeTicker';
+import { StatCounter } from './common/StatCounter';
 
 interface FeedSectionProps {
   currentUser: Profile | null;
@@ -41,11 +53,14 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
   const [posts, setPosts] = useState<Post[]>(cachedPosts);
   const [events, setEvents] = useState<Event[]>(cachedEvents);
   const [loading, setLoading] = useState(cachedPosts.length === 0);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Comments modal state
   const [activeCommentsPost, setActiveCommentsPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<PostComment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
 
@@ -60,6 +75,7 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
   // Fetch posts and events
   const fetchData = async () => {
     if (posts.length === 0) setLoading(true);
+    setFetchError(null);
     try {
       // 1. Fetch posts with society info
       const { data: postsData, error: postsErr } = await supabase
@@ -129,8 +145,9 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
       if (socData && socData.length > 0) {
         setSelectedSocietyId(socData[0].id);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching feed:', err);
+      setFetchError(err.message || 'Failed to load campus announcements.');
     } finally {
       setLoading(false);
     }
@@ -180,6 +197,7 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
   // Open comments
   const handleOpenComments = async (post: Post) => {
     setActiveCommentsPost(post);
+    setLoadingComments(true);
     try {
       const { data, error } = await supabase
         .from('post_comments')
@@ -194,10 +212,12 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
       setComments(data || []);
     } catch (err) {
       console.error('Error fetching comments:', err);
+    } finally {
+      setLoadingComments(false);
     }
   };
 
-  // Submit comment (BUG-10: supports Enter key and button click)
+  // Submit comment
   const handleAddComment = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newCommentText.trim() || !activeCommentsPost) return;
@@ -208,7 +228,6 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
 
     setSubmittingComment(true);
     try {
-      // Ensure active session exists
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) {
         onRequireAuth();
@@ -233,7 +252,6 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
       setNewCommentText('');
       showToast('Comment posted successfully!', 'success');
 
-      // Update post comment count optimistically
       setPosts((prev) =>
         prev.map((p) =>
           p.id === activeCommentsPost.id
@@ -249,7 +267,7 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
     }
   };
 
-  // BUG-12: Share button with visual toast feedback
+  // Share post with visual toast feedback
   const handleSharePost = async (post: Post) => {
     const shareUrl = window.location.href;
     const shareText = `${post.title} | UET Societies Hub`;
@@ -273,7 +291,7 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
         });
         showToast('Shared successfully!', 'success');
       } catch (e) {
-        // Ignored if cancelled
+        // Ignored
       }
     } else {
       showToast('Link copied to clipboard!', 'success');
@@ -319,24 +337,68 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
       showToast('Announcement published successfully!', 'success');
     } catch (err: any) {
       console.error('Error creating post:', err);
-      showToast(err.message || 'Failed to create post. Only society admins can publish.', 'error');
+      showToast(err.message || 'Failed to create post. Only authorized society leads can publish.', 'error');
     } finally {
       setSubmittingPost(false);
     }
   };
 
+  // Filter posts by category and normalized search query
+  const normalizedQuery = normalizeSearchQuery(searchQuery);
   const filteredPosts = posts.filter((p) => {
-    if (filterCategory === 'all') return true;
-    if (filterCategory === 'technical') return p.society?.category === 'Technical';
-    if (filterCategory === 'literary') return p.society?.category === 'Literary';
-    if (filterCategory === 'social') return p.society?.category === 'Social';
-    return true;
+    if (filterCategory === 'technical' && p.society?.category !== 'Technical') return false;
+    if (filterCategory === 'literary' && p.society?.category !== 'Literary') return false;
+    if (filterCategory === 'social' && p.society?.category !== 'Social') return false;
+
+    if (!normalizedQuery) return true;
+    const titleMatch = normalizeSearchQuery(p.title).includes(normalizedQuery);
+    const contentMatch = normalizeSearchQuery(p.content).includes(normalizedQuery);
+    const societyMatch = p.society?.name
+      ? normalizeSearchQuery(p.society.name).includes(normalizedQuery)
+      : false;
+    return titleMatch || contentMatch || societyMatch;
   });
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Top Banner: Upcoming Events Carousel */}
-      <section className="bg-gradient-to-r from-slate-900 via-slate-900/95 to-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
+      {/* Step 3 Redesign: Modern Editorial Campus-Tech Hero */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900/90 to-emerald-950/30 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-3 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+              <Sparkles className="w-3.5 h-3.5" /> Official UET Student Council Platform
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight leading-tight">
+              Where Engineering Leadership Meets Innovation
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
+              Stay ahead with real-time official bulletins, hackathons, annual symposiums, and recruitment drives across all chartered societies of UET Lahore.
+            </p>
+          </div>
+
+          {/* Quick Metrics Counter Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-3 w-full lg:w-auto shrink-0">
+            <StatCounter label="Chartered Societies" target={24} suffix="+" icon={<Award className="w-4 h-4 text-emerald-400" />} />
+            <StatCounter label="Active Members" target={1850} suffix="+" icon={<Users className="w-4 h-4 text-emerald-400" />} />
+            <StatCounter label="Campus Hackathons" target={42} suffix="" icon={<Flame className="w-4 h-4 text-emerald-400" />} />
+            <StatCounter label="Flagship Events" target={115} suffix="+" icon={<Calendar className="w-4 h-4 text-emerald-400" />} />
+          </div>
+        </div>
+
+        {/* Step 3: Infinite Marquee of Chartered Society Emblems */}
+        <div className="mt-6 pt-6 border-t border-slate-800/80">
+          <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-2 uppercase tracking-wider">
+            <span>Official Chartered Student Societies</span>
+            <span>UET Lahore Accreditation</span>
+          </div>
+          <MarqueeTicker />
+        </div>
+      </section>
+
+      {/* Flagship Events Carousel Banner */}
+      <section className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
@@ -353,7 +415,7 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
           </div>
           <button
             onClick={onNavigateToCalendar}
-            className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition"
+            className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition cursor-pointer"
           >
             <span>View Full Calendar</span>
             <ChevronRight className="w-4 h-4" />
@@ -364,16 +426,11 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {events.length > 0 ? (
             events.map((evt) => {
-              const startDate = new Date(evt.start_time).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              });
+              const startDate = formatPKTDate(evt.start_time);
               return (
                 <div
                   key={evt.id}
-                  className="bg-slate-950/70 border border-slate-800 hover:border-emerald-500/40 rounded-2xl p-4 flex flex-col justify-between transition group"
+                  className="tech-card bg-slate-950/80 border border-slate-800/90 hover:border-emerald-500/40 rounded-2xl p-4 flex flex-col justify-between transition group"
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-2">
@@ -397,12 +454,12 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
                       <span className="truncate">{evt.venue}</span>
                     </span>
 
-                    {/* BUG-03: Route event registration through internal registration modal */}
                     <button
                       type="button"
                       onClick={() => onRegisterEvent(evt)}
-                      className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1"
+                      className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1 cursor-pointer"
                     >
+                      <Ticket className="w-3 h-3" />
                       <span>Register</span>
                       <span>&rarr;</span>
                     </button>
@@ -418,10 +475,10 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
         </div>
       </section>
 
-      {/* Main Feed Header & Filters */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Main Feed Header, Search & Filter Controls */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         {/* Category Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {[
             { id: 'all', label: 'All Updates' },
             { id: 'technical', label: 'Technical & Hackathons' },
@@ -431,9 +488,9 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
             <button
               key={cat.id}
               onClick={() => setFilterCategory(cat.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition cursor-pointer ${
                 filterCategory === cat.id
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950'
                   : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800'
               }`}
             >
@@ -442,19 +499,51 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
           ))}
         </div>
 
-        {/* Action: Create Announcement */}
-        {currentUser && (
-          <button
-            onClick={() => setCreatePostOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-white transition"
-          >
-            <PlusCircle className="w-4 h-4 text-emerald-400" />
-            <span>Post Update</span>
-          </button>
-        )}
+        {/* Search announcements input & create post action */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="Search announcements..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-8 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-2 text-slate-400 hover:text-white"
+                aria-label="Clear announcement search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {currentUser && (
+            <button
+              onClick={() => setCreatePostOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-white transition cursor-pointer shrink-0"
+            >
+              <PlusCircle className="w-4 h-4 text-emerald-400" />
+              <span>Post Update</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* BUG-08 Fix: Beautiful Skeleton Wireframes with Shimmer Content instead of Blank Dark Rectangles */}
+      {/* Error state banner */}
+      {fetchError && posts.length === 0 && (
+        <ErrorState
+          title="Failed to Load Campus Bulletins"
+          message={fetchError}
+          onRetry={fetchData}
+        />
+      )}
+
+      {/* Feed Cards List */}
       {loading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
@@ -484,19 +573,16 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
       ) : filteredPosts.length > 0 ? (
         <div className="space-y-5">
           {filteredPosts.map((post) => {
-            const timeAgo = new Date(post.created_at).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-            });
+            const timeAgo = getRelativeTime(post.created_at);
             return (
               <article
                 key={post.id}
-                className="bg-slate-900/80 border border-slate-800/90 hover:border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-xl transition"
+                className="tech-card bg-slate-900/90 border border-slate-800/90 hover:border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-xl transition-all"
               >
                 {/* Author / Society Header */}
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 flex items-center justify-center font-bold text-emerald-400 text-sm">
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 flex items-center justify-center font-bold text-emerald-400 text-sm shadow">
                       {post.society?.name?.charAt(0) || 'U'}
                     </div>
                     <div>
@@ -518,61 +604,51 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
                 </div>
 
                 {/* Content */}
-                <h3 className="text-base sm:text-lg font-bold text-white mb-2 leading-snug">
-                  {post.title}
-                </h3>
-                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">
-                  {post.content}
-                </p>
+                <div className="space-y-2 mb-4">
+                  <h3 className="text-base font-bold text-white leading-snug">{post.title}</h3>
+                  <p className="text-xs sm:text-sm text-slate-300 whitespace-pre-line leading-relaxed">
+                    {post.content}
+                  </p>
+                </div>
 
-                {/* Media gallery if any */}
-                {post.media_urls && post.media_urls.length > 0 && (
-                  <div className="mt-4 rounded-2xl overflow-hidden border border-slate-800">
-                    <img
-                      src={post.media_urls[0]}
-                      alt="Post visual"
-                      className="w-full max-h-96 object-cover"
-                    />
-                  </div>
-                )}
-
-                {/* Interaction Footer */}
-                <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                {/* Actions & Counters */}
+                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
                   <div className="flex items-center gap-4">
-                    {/* Like button */}
                     <button
+                      type="button"
                       onClick={() => handleToggleLike(post)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+                      className={`flex items-center gap-1.5 transition cursor-pointer ${
                         post.user_has_liked
-                          ? 'text-red-400 bg-red-950/40 font-medium'
-                          : 'hover:text-red-400 hover:bg-slate-800/60'
+                          ? 'text-rose-400 font-semibold'
+                          : 'hover:text-rose-400 text-slate-400'
                       }`}
+                      aria-label="Like post"
                     >
                       <Heart
-                        className={`w-4 h-4 ${
-                          post.user_has_liked ? 'fill-current text-red-400' : ''
-                        }`}
+                        className={`w-4 h-4 ${post.user_has_liked ? 'fill-rose-500 text-rose-500' : ''}`}
                       />
                       <span>{post.likes_count || 0}</span>
                     </button>
 
-                    {/* Comments button */}
                     <button
+                      type="button"
                       onClick={() => handleOpenComments(post)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-white hover:bg-slate-800/60 transition"
+                      className="flex items-center gap-1.5 hover:text-emerald-400 transition cursor-pointer"
+                      aria-label="View comments"
                     >
                       <MessageCircle className="w-4 h-4" />
-                      <span>{post.comments_count || 0} Comments</span>
+                      <span>{post.comments_count || 0}</span>
                     </button>
                   </div>
 
-                  {/* BUG-12: Share button with visual toast */}
                   <button
+                    type="button"
                     onClick={() => handleSharePost(post)}
-                    className="p-1.5 rounded-lg hover:text-white hover:bg-slate-800/60 transition"
-                    title="Share announcement link"
+                    className="flex items-center gap-1.5 hover:text-white transition cursor-pointer"
+                    aria-label="Share announcement"
                   >
                     <Share2 className="w-4 h-4" />
+                    <span>Share</span>
                   </button>
                 </div>
               </article>
@@ -581,186 +657,145 @@ export const FeedSection: React.FC<FeedSectionProps> = ({
         </div>
       ) : (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center">
-          <p className="text-slate-400 text-sm">No announcements found in this category.</p>
+          <p className="text-slate-400 text-sm">
+            {searchQuery
+              ? `No announcements matching "${searchQuery}".`
+              : 'No bulletins found in this category.'}
+          </p>
         </div>
       )}
 
-      {/* Comments Slide-out Drawer */}
-      {activeCommentsPost && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700/80 rounded-t-3xl sm:rounded-3xl w-full max-w-lg shadow-2xl h-[80vh] sm:h-[600px] flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/50">
-              <div>
-                <h3 className="font-bold text-white text-sm sm:text-base">Comments</h3>
-                <p className="text-xs text-slate-400 truncate max-w-xs">
-                  {activeCommentsPost.title}
-                </p>
-              </div>
-              <button
-                onClick={() => setActiveCommentsPost(null)}
-                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Comments List */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {comments.length > 0 ? (
-                comments.map((c) => (
-                  <div key={c.id} className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-emerald-400 shrink-0">
-                      {c.user?.full_name?.charAt(0) || 'U'}
-                    </div>
-                    <div className="flex-1 bg-slate-950/70 border border-slate-800 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold text-white">
-                          {c.user?.full_name || 'UET Student'}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {new Date(c.created_at).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-300 leading-relaxed">{c.content}</p>
-                    </div>
+      {/* Accessible Comments Modal */}
+      <Modal
+        isOpen={!!activeCommentsPost}
+        onClose={() => setActiveCommentsPost(null)}
+        title="Official Discussion Thread"
+        description={activeCommentsPost ? `${activeCommentsPost.society?.name || 'UET Campus'} • ${activeCommentsPost.title}` : undefined}
+        maxWidth="max-w-lg"
+      >
+        <div className="p-6 space-y-4 max-h-[75vh] flex flex-col">
+          {/* Scrollable Comments list */}
+          <div className="flex-1 overflow-y-auto space-y-3 min-h-[200px] max-h-[360px] pr-1">
+            {loadingComments ? (
+              <div className="py-8 text-center text-xs text-slate-500">Loading comments...</div>
+            ) : comments.length > 0 ? (
+              comments.map((comment) => (
+                <div key={comment.id} className="p-3 bg-slate-950 rounded-2xl border border-slate-800/80 text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-white">
+                      {comment.user?.full_name || 'UET Student'}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {getRelativeTime(comment.created_at)}
+                    </span>
                   </div>
-                ))
-              ) : (
-                <div className="py-12 text-center text-xs text-slate-500">
-                  No comments yet. Be the first to share your thoughts!
+                  <p className="text-slate-300 leading-relaxed">{comment.content}</p>
                 </div>
-              )}
-            </div>
-
-            {/* Add Comment Input (BUG-10: handles Enter key and Send button) */}
-            <div className="p-4 border-t border-slate-800 bg-slate-950/60">
-              {currentUser ? (
-                <form onSubmit={handleAddComment} className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Write a comment as student... (Press Enter to post)"
-                    value={newCommentText}
-                    onChange={(e) => setNewCommentText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleAddComment();
-                      }
-                    }}
-                    className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                  />
-                  <button
-                    type="submit"
-                    onClick={() => handleAddComment()}
-                    disabled={submittingComment || !newCommentText.trim()}
-                    className="p-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl transition"
-                    title="Send comment"
-                  >
-                    <Send className="w-4 h-4 pointer-events-none" />
-                  </button>
-                </form>
-              ) : (
-                <div className="text-center py-2">
-                  <button
-                    onClick={() => {
-                      setActiveCommentsPost(null);
-                      onRequireAuth();
-                    }}
-                    className="text-xs font-semibold text-emerald-400 hover:underline"
-                  >
-                    Sign in to participate in the discussion &rarr;
-                  </button>
-                </div>
-              )}
-            </div>
+              ))
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-500">
+                No comments yet. Start the conversation below!
+              </div>
+            )}
           </div>
+
+          {/* Comment Form (supports Enter and button click) */}
+          <form onSubmit={handleAddComment} className="pt-3 border-t border-slate-800 flex items-center gap-2">
+            <input
+              type="text"
+              placeholder={currentUser ? 'Write a respectful comment...' : 'Sign in to comment'}
+              disabled={!currentUser || submittingComment}
+              value={newCommentText}
+              onChange={(e) => setNewCommentText(e.target.value)}
+              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            />
+            <button
+              type="submit"
+              disabled={!currentUser || submittingComment || !newCommentText.trim()}
+              className="p-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl shadow-md transition cursor-pointer"
+              aria-label="Post comment"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </form>
         </div>
-      )}
+      </Modal>
 
-      {/* Create Announcement Modal */}
-      {createPostOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/40">
-              <h3 className="font-bold text-white text-base">Publish Society Announcement</h3>
-              <button
-                onClick={() => setCreatePostOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreatePost} className="p-6 space-y-4">
-              <div>
-                <label className="text-xs font-medium text-slate-300 mb-1 block">
-                  Select Publishing Society
-                </label>
-                <select
-                  value={selectedSocietyId}
-                  onChange={(e) => setSelectedSocietyId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                >
-                  {societiesList.map((soc) => (
-                    <option key={soc.id} value={soc.id}>
-                      {soc.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 mb-1 block">
-                  Announcement Title
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Registrations Open for Annual Tech Fest"
-                  value={newPostTitle}
-                  onChange={(e) => setNewPostTitle(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 mb-1 block">
-                  Detailed Content / Guidelines
-                </label>
-                <textarea
-                  required
-                  rows={4}
-                  placeholder="Provide schedule, venue, eligibility, and rules..."
-                  value={newPostContent}
-                  onChange={(e) => setNewPostContent(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setCreatePostOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingPost}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-semibold text-white shadow-md shadow-emerald-900/40"
-                >
-                  {submittingPost ? 'Publishing...' : 'Publish Update'}
-                </button>
-              </div>
-            </form>
+      {/* Accessible Create Post Modal */}
+      <Modal
+        isOpen={createPostOpen}
+        onClose={() => setCreatePostOpen(false)}
+        title="Publish Campus Bulletin"
+        description="Official communication for registered student societies"
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleCreatePost} className="p-6 space-y-4 text-xs">
+          <div>
+            <label htmlFor="create-post-society" className="text-slate-300 font-medium block mb-1">
+              Publishing Society
+            </label>
+            <select
+              id="create-post-society"
+              value={selectedSocietyId}
+              onChange={(e) => setSelectedSocietyId(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+            >
+              {societiesList.map((soc) => (
+                <option key={soc.id} value={soc.id}>
+                  {soc.name}
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
-      )}
+
+          <div>
+            <label htmlFor="create-post-title" className="text-slate-300 font-medium block mb-1">
+              Bulletin Headline
+            </label>
+            <input
+              id="create-post-title"
+              type="text"
+              required
+              placeholder="e.g. CodeSpree 2026: Round 1 Qualification Results"
+              value={newPostTitle}
+              onChange={(e) => setNewPostTitle(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="create-post-content" className="text-slate-300 font-medium block mb-1">
+              Official Body / Announcement Text
+            </label>
+            <textarea
+              id="create-post-content"
+              required
+              rows={4}
+              placeholder="Detailed announcement, guidelines, venue details, and requirements..."
+              value={newPostContent}
+              onChange={(e) => setNewPostContent(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => setCreatePostOpen(false)}
+              className="px-4 py-2 rounded-xl text-slate-400 hover:text-white transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submittingPost}
+              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl shadow-md shadow-emerald-950 transition cursor-pointer"
+            >
+              {submittingPost ? 'Publishing...' : 'Publish Announcement'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
